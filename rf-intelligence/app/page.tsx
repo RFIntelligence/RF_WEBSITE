@@ -1,11 +1,13 @@
 import { RFNavbar } from "@/components/sections/Navbar";
 import { Hero } from "@/components/sections/Hero";
+import { AboutRF } from "@/components/sections/AboutRF";
 
 export default function HomePage() {
   return (
     <>
       <RFNavbar />
       <Hero />
+      <AboutRF />
 
       {/*
         Phase 3+ sections will be added here in future phases.
