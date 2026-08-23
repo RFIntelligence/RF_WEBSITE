@@ -18,7 +18,7 @@ import {
 const NAV_ITEMS = [
   { name: "Home",         link: "/"            },
   { name: "About RF",     link: "/#about"      },
-  { name: "Services",     link: "/services"    },
+  { name: "Services",     link: "/#services"   },
   { name: "Why RF",       link: "/why-rf"      },
   { name: "Benefits",     link: "/benefits"    },
   { name: "How It Works", link: "/how-it-works"},
