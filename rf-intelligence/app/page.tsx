@@ -2,6 +2,7 @@ import { RFNavbar } from "@/components/sections/Navbar";
 import { Hero } from "@/components/sections/Hero";
 import { AboutRF } from "@/components/sections/AboutRF";
 import { ServicesShowcase } from "@/components/sections/ServicesShowcase";
+import { WhyRF } from "@/components/sections/WhyRF";
 
 export default function HomePage() {
   return (
@@ -13,6 +14,10 @@ export default function HomePage() {
       {/* ── Services — reachable by scrolling the home page ── */}
       <div id="services" aria-hidden="true" />
       <ServicesShowcase />
+
+      {/* ── Why RF — reachable by scrolling the home page ── */}
+      <div id="why-rf" aria-hidden="true" />
+      <WhyRF />
 
       {/*
         Phase 3+ sections will be added here in future phases.
