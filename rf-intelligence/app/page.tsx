@@ -4,6 +4,7 @@ import { AboutRF } from "@/components/sections/AboutRF";
 import { ServicesShowcase } from "@/components/sections/ServicesShowcase";
 import { WhyRF } from "@/components/sections/WhyRF";
 import { Footer } from "@/components/sections/Footer";
+import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
 
 export default function HomePage() {
   return (
@@ -19,6 +20,10 @@ export default function HomePage() {
       {/* ── Why RF — reachable by scrolling the home page ── */}
       <div id="why-rf" aria-hidden="true" />
       <WhyRF />
+
+      {/* ── How It Works — reachable by scrolling the home page, in nav order ── */}
+      <div id="how-it-works" aria-hidden="true" />
+      <HowItWorksSection cta />
 
       <Footer />
 
