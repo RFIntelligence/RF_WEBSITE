@@ -3,6 +3,7 @@ import { Hero } from "@/components/sections/Hero";
 import { AboutRF } from "@/components/sections/AboutRF";
 import { ServicesShowcase } from "@/components/sections/ServicesShowcase";
 import { WhyRF } from "@/components/sections/WhyRF";
+import { Benefits } from "@/components/sections/Benefits";
 import { Footer } from "@/components/sections/Footer";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
 
@@ -21,9 +22,13 @@ export default function HomePage() {
       <div id="why-rf" aria-hidden="true" />
       <WhyRF />
 
+      {/* ── Benefits — reachable by scrolling the home page ── */}
+      <div id="benefits" aria-hidden="true" />
+      <Benefits />
+
       {/* ── How It Works — reachable by scrolling the home page, in nav order ── */}
       <div id="how-it-works" aria-hidden="true" />
-      <HowItWorksSection cta />
+      <HowItWorksSection />
 
       <Footer />
 
