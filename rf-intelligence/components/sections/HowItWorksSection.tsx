@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "next/link";
 import HowItWorks, { type Step } from "@/components/ui/how-it-works";
 
 /**
@@ -40,12 +39,7 @@ export const HIW_STAGES: Step[] = [
   },
 ];
 
-export function HowItWorksSection({
-  cta = false,
-}: {
-  /** Show a link to the dedicated /how-it-works page */
-  cta?: boolean;
-}) {
+export function HowItWorksSection() {
   return (
     <section aria-labelledby="hiw-section-headline">
       {/* ── Heading block ── */}
@@ -92,28 +86,6 @@ export function HowItWorksSection({
 
       {/* ── Pinned-note step cards ── */}
       <HowItWorks features={HIW_STAGES} />
-
-      {cta && (
-        <div className="w-full flex justify-center px-6 pb-24 -mt-6">
-          <Link
-            href="/how-it-works"
-            className="group inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-colors duration-200 hover:bg-[rgba(242,78,75,0.08)] cursor-pointer"
-            style={{
-              fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
-              color: "var(--accent)",
-              border: "1px solid rgba(242, 78, 75, 0.45)",
-            }}
-          >
-            Explore the full process
-            <span
-              aria-hidden="true"
-              className="transition-transform duration-200 group-hover:translate-x-0.5"
-            >
-              →
-            </span>
-          </Link>
-        </div>
-      )}
     </section>
   );
 }

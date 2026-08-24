@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { name: "About RF",     link: "/#about"      },
   { name: "Services",     link: "/#services"   },
   { name: "Why RF",       link: "/#why-rf"     },
-  { name: "Benefits",     link: "/benefits"    },
+  { name: "Benefits",     link: "/#benefits"   },
   { name: "How It Works", link: "/#how-it-works"},
 ];
 
