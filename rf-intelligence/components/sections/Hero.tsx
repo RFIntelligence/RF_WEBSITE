@@ -93,9 +93,9 @@ export function Hero() {
             className="text-[var(--text-secondary)] leading-[1.6] mb-10 max-w-[600px] mx-auto"
             style={{ fontSize: "clamp(1rem, 1.5vw, 1.2rem)" }}
           >
-            RF Intelligence turns repetitive operational workflows into
-            intelligent, automated systems that reduce manual work and free
-            your team for higher-value decisions.
+            RF Intelligence turns repetitive operational work into automated
+            systems — so your team spends less time on tasks and more time on
+            decisions that matter.
           </motion.p>
 
           {/* CTAs */}
@@ -112,13 +112,13 @@ export function Hero() {
               />
             </Link>
 
-            <a href="#what-is-rf">
+            <Link href="/how-it-works">
               <SweepButton
-                label="Explore RF Intelligence"
+                label="See How It Works"
                 defaultIcon="/explore.svg"
                 hoverIcon="/explore1.svg"
               />
-            </a>
+            </Link>
           </motion.div>
         </motion.div>
       </div>

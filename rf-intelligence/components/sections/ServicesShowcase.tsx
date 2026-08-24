@@ -65,13 +65,12 @@ const SERVICE_BENTOS: {
         panel: (
           <BentoStatPanel
             statLabel="Coverage"
-            statValue="94.2%"
-            statProgress={94}
-            statSub="Across mapped back-office workflows"
+            statValue="End-to-end"
+            statSub="Intake to handoff, mapped before anything ships"
             watermarkIcon={BarChartIcon}
             chips={[
-              { value: "120+", label: "Workflows live", icon: LeftToRightListDashIcon },
-              { value: "30 hrs", label: "Saved weekly", icon: Tick01Icon },
+              { value: "Approvals", label: "Routed & approved", icon: LeftToRightListDashIcon },
+              { value: "Entry & checks", label: "Captured & validated", icon: Tick01Icon },
             ]}
           />
         ),
@@ -145,14 +144,13 @@ const SERVICE_BENTOS: {
         description: "Success rate across all deployments.",
         panel: (
           <BentoStatPanel
-            statLabel="Task success"
-            statValue="96.8%"
-            statProgress={97}
-            statSub="Verified by automated eval suites"
+            statLabel="Agent behaviour"
+            statValue="Guardrailed"
+            statSub="Bounded by rules you define and review"
             watermarkIcon={UserGroupIcon}
             chips={[
-              { value: "12", label: "Agents live", icon: Message01Icon },
-              { value: "24/7", label: "Uptime", icon: CircleArrowUpRight02Icon },
+              { value: "Your tools", label: "Inside your stack", icon: Message01Icon },
+              { value: "Logged", label: "Every action", icon: CircleArrowUpRight02Icon },
             ]}
           />
         ),
@@ -168,7 +166,7 @@ const SERVICE_BENTOS: {
           <BentoListPanel
             listTitle="Fleet"
             rows={[
-              { name: "support-triage v2.1", role: "Handles 1.4k tickets daily", status: "Active", color: "bg-emerald-400" },
+              { name: "support-triage v2.1", role: "Owns support ticket triage", status: "Active", color: "bg-emerald-400" },
               { name: "sales-brief v1.3", role: "Drafts account briefings", status: "Active", color: "bg-emerald-400" },
               { name: "data-fetcher v0.9", role: "In evaluation sandbox", status: "Canary", color: "bg-amber-400" },
             ]}
@@ -224,14 +222,13 @@ const SERVICE_BENTOS: {
         description: "SLA across all live sources.",
         panel: (
           <BentoStatPanel
-            statLabel="Freshness SLA"
-            statValue="99.1%"
-            statProgress={99}
-            statSub="Rolling 30-day pipeline reliability"
+            statLabel="Freshness"
+            statValue="Always current"
+            statSub="Pipelines built to keep operational views live"
             watermarkIcon={Search01Icon}
             chips={[
-              { value: "2.3M", label: "Events / day", icon: DatabaseIcon },
-              { value: "41", label: "Sources", icon: Folder02Icon },
+              { value: "Streaming", label: "Ingestion", icon: DatabaseIcon },
+              { value: "Any source", label: "DBs, APIs, files", icon: Folder02Icon },
             ]}
           />
         ),
@@ -303,14 +300,13 @@ const SERVICE_BENTOS: {
         description: "Delivery and latency across connectors.",
         panel: (
           <BentoStatPanel
-            statLabel="Webhook delivery"
-            statValue="99.98%"
-            statProgress={99}
-            statSub="Across all production event streams"
+            statLabel="Integration health"
+            statValue="Bi-directional"
+            statSub="Between the platforms you already run"
             watermarkIcon={Folder02Icon}
             chips={[
-              { value: "50+", label: "Integrations", icon: Settings02Icon },
-              { value: "<80ms", label: "Median latency", icon: CircleArrowUpRight02Icon },
+              { value: "CRM & ERP", label: "Connected", icon: Settings02Icon },
+              { value: "Event-driven", label: "No batch delays", icon: CircleArrowUpRight02Icon },
             ]}
           />
         ),
@@ -382,14 +378,13 @@ const SERVICE_BENTOS: {
         description: "Volume reaching human attention.",
         panel: (
           <BentoStatPanel
-            statLabel="Noise reduced"
-            statValue="91%"
-            statProgress={91}
-            statSub="Less noise reaching humans, week over week"
+            statLabel="Noise filter"
+            statValue="Filtered first"
+            statSub="Only genuine exceptions reach a human"
             watermarkIcon={Message01Icon}
             chips={[
-              { value: "4", label: "Exceptions / day", icon: InformationCircleIcon },
-              { value: "100%", label: "Audit coverage", icon: Tick01Icon },
+              { value: "Exceptions", label: "Routed for review", icon: InformationCircleIcon },
+              { value: "Audit trail", label: "Every decision", icon: Tick01Icon },
             ]}
           />
         ),

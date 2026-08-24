@@ -3,6 +3,7 @@ import { Hero } from "@/components/sections/Hero";
 import { AboutRF } from "@/components/sections/AboutRF";
 import { ServicesShowcase } from "@/components/sections/ServicesShowcase";
 import { WhyRF } from "@/components/sections/WhyRF";
+import { Footer } from "@/components/sections/Footer";
 
 export default function HomePage() {
   return (
@@ -19,11 +20,12 @@ export default function HomePage() {
       <div id="why-rf" aria-hidden="true" />
       <WhyRF />
 
+      <Footer />
+
       {/*
         Phase 3+ sections will be added here in future phases.
-        The anchor #what-is-rf is a forward-reference from the Hero's
-        "Explore RF Intelligence" secondary CTA — it will resolve once
-        Phase 3 (What is RF Intelligence) is built.
+        The anchor #what-is-rf is a forward-reference — it will resolve
+        once the "What is RF Intelligence" section is built.
       */}
       <div id="what-is-rf" aria-hidden="true" />
     </>

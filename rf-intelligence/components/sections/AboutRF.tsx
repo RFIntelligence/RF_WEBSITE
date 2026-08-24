@@ -120,7 +120,7 @@ const StyledWrapper = styled.div`
     position: relative;
     overflow: hidden;
     width: var(--w-wrap-card);
-    height: calc(var(--h-card) / 1.25);
+    height: calc(var(--h-card) + var(--t-card) + 4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -317,22 +317,7 @@ const StyledWrapper = styled.div`
     align-items: center;
     justify-content: center;
     z-index: 4;
-  }
-
-  .lines::after {
-    content: "";
-    width: 100%;
-    height: 0px;
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-    --mask-bg: #e8e8e8;
-    background: var(--mask-bg);
-    mask-image: radial-gradient(
-      50% 200px at top,
-      transparent 20%,
-      var(--mask-bg)
-    );
+    pointer-events: none;
   }
 
   .line {

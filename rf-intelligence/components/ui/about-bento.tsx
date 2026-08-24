@@ -49,51 +49,6 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
-/**
- * Animates a number from 0 to `target` using ease-out cubic easing.
- * Returns the current display value. If reduced motion, returns target immediately.
- */
-function useCountUp(
-  target: number,
-  duration: number,
-  shouldStart: boolean,
-  reducedMotion: boolean,
-) {
-  const [value, setValue] = useState(reducedMotion ? target : 0);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      setValue(target);
-      return;
-    }
-    if (!shouldStart) return;
-
-    let startTime: number | null = null;
-
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-    const tick = (now: number) => {
-      if (startTime === null) startTime = now;
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOutCubic(progress);
-      setValue(Math.round(eased * target));
-
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [shouldStart, target, duration, reducedMotion]);
-
-  return value;
-}
-
 /* ─────────────────────────────────────────────────────────────────────────────
    GlowCard — wrapper that adds the rotating gradient border on hover
 ───────────────────────────────────────────────────────────────────────────── */
@@ -190,26 +145,23 @@ const GlowCardContent = styled.div<{ $bg: string }>`
    Component
 ───────────────────────────────────────────────────────────────────────────── */
 
-const COUNT_DURATION = 2000; // ms
 const STAGGER_DELAY = 200; // ms between cards
 
 /**
- * AboutBento — Bento-grid stat/impact block.
+ * AboutBento — Bento-grid impact block.
  * Rendered inside the #about section, directly below the existing
  * manifesto + rotating-card content.
+ *
+ * NOTE: previously showed "120+ Workflows Automated" / "94% Retention".
+ * Those figures were not backed by verifiable RF data and were replaced
+ * with honest capability statements per client review. If verified
+ * metrics and real client proof (examples, logos, testimonials) become
+ * available, they can be restored here.
  */
 export function AboutBento() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const inView = useInView(sectionRef);
   const reducedMotion = usePrefersReducedMotion();
-
-  // Count-up values
-  const statValue = useCountUp(120, COUNT_DURATION, inView, reducedMotion);
-  const retentionValue = useCountUp(94, COUNT_DURATION, inView, reducedMotion);
-  const countDone = statValue >= 120;
-
-  // Progress bar width synced with count
-  const progressPercent = reducedMotion ? 80 : (statValue / 120) * 80;
 
   // Fade-up style helper: returns inline styles for staggered fade-in
   const fadeUpStyle = useCallback(
@@ -294,15 +246,15 @@ export function AboutBento() {
                 className="text-base md:text-lg leading-relaxed max-w-sm"
                 style={{ color: "rgba(245, 241, 236, 0.7)" }}
               >
-                We&apos;ve helped teams automate hundreds of repetitive
-                workflows&nbsp;&mdash; giving them back hours to spend on
-                decisions that actually need a person.
+                We build automation around the repeatable work your team
+                already does&nbsp;&mdash; so hours go back to decisions that
+                actually need a person.
               </p>
             </div>
           </GlowCardContent>
         </GlowCard>
 
-        {/* ─── Stat Card (top-right, medium) ─── */}
+        {/* ─── Attribute Card (top-right, medium) ─── */}
         <GlowCard
           $bg="#E63946"
           $glowColors="linear-gradient(#F5F1EC, #FFFFFF)"
@@ -316,44 +268,27 @@ export function AboutBento() {
               className="text-[11px] font-bold uppercase tracking-[0.15em]"
               style={{ color: "rgba(10, 10, 10, 0.7)" }}
             >
-              Workflows Automated
+              How we build
             </span>
 
             <div className="space-y-2 mt-6">
               <span
-                className="text-6xl font-bold tracking-tighter"
+                className="text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.05]"
                 style={{ color: "#0A0A0A" }}
               >
-                {statValue}
-                <span
-                  style={{
-                    opacity: countDone || reducedMotion ? 1 : 0,
-                    transition: "opacity 0.2s ease-out",
-                  }}
-                >
-                  +
-                </span>
+                Workflow-first
               </span>
-              {/* Progress bar */}
-              <div
-                className="h-1.5 w-full rounded-full"
-                style={{ backgroundColor: "rgba(10, 10, 10, 0.15)" }}
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: "rgba(10, 10, 10, 0.65)" }}
               >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${progressPercent}%`,
-                    backgroundColor: "#0A0A0A",
-                    boxShadow: "0 0 10px rgba(10, 10, 10, 0.4)",
-                    transition: reducedMotion ? "none" : undefined,
-                  }}
-                />
-              </div>
+                Every automation is shaped around a process you already run.
+              </p>
             </div>
           </GlowCardContent>
         </GlowCard>
 
-        {/* ─── Detail Card (small, next to stat card) ─── */}
+        {/* ─── Detail Card (small, next to attribute card) ─── */}
         <GlowCard
           $bg="#1A1414"
           $glowColors="linear-gradient(#E63946, #FF9B8A)"
@@ -373,13 +308,13 @@ export function AboutBento() {
               className="text-xl font-bold leading-tight"
               style={{ color: "#F5F1EC" }}
             >
-              {retentionValue}% Retention
+              Human-in-the-loop
             </h4>
             <p
               className="text-xs"
               style={{ color: "rgba(245, 241, 236, 0.45)" }}
             >
-              Client renewal rate
+              Judgment calls stay with your team.
             </p>
           </GlowCardContent>
         </GlowCard>
