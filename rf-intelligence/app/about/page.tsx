@@ -21,10 +21,10 @@ const GlassShards = dynamic(
 ───────────────────────────────────────────────────────────────────────────── */
 
 const STATS = [
-  { value: "120+", label: "Workflows automated" },
-  { value: "40", label: "Hours reclaimed per team / month" },
-  { value: "98%", label: "Client retention" },
-  { value: "4", label: "Years running" },
+  { value: "Workflow-first", label: "Automation shaped around your processes" },
+  { value: "Human-controlled", label: "Judgment calls stay with your team" },
+  { value: "Integration-ready", label: "Works with the systems you already run" },
+  { value: "Built to scale", label: "Grows with volume, locations and complexity" },
 ];
 
 const VALUES = [
@@ -104,20 +104,11 @@ export default function AboutPage() {
                 className="leading-[1.7] mb-6"
                 style={{ fontSize: "clamp(1rem, 1.3vw, 1.125rem)", color: "rgba(245, 241, 236, 0.85)" }}
               >
-                We started RF Intelligence after watching the same pattern across
-                every team we worked with: smart people spending their time on work
-                that didn&rsquo;t need their judgment. Approvals. Data entry. Status
-                checks. The operational static that fills a calendar without moving
-                anything forward.
-              </p>
-              <p
-                className="leading-[1.7]"
-                style={{ fontSize: "clamp(1rem, 1.3vw, 1.125rem)", color: "rgba(245, 241, 236, 0.85)" }}
-              >
-                So we built the layer that filters it out — automated systems that
-                handle the repeatable work reliably, and surface only what actually
-                needs a human decision. Less noise. Clearer signal. More time spent
-                on what matters.
+                We kept seeing the same pattern: smart teams stuck doing work
+                that didn&apos;t need their judgment — approvals, data entry,
+                status checks. So we built the layer that filters it out. It
+                automates the repeatable work and surfaces only what actually
+                needs a human decision.
               </p>
             </div>
 
@@ -177,7 +168,7 @@ export default function AboutPage() {
                 <p
                   className="font-bold tracking-tight leading-none mb-2"
                   style={{
-                    fontSize: "clamp(2.5rem, 5vw, 3.75rem)",
+                    fontSize: "clamp(1.5rem, 3vw, 2.25rem)",
                     color: "#F5F1EC",
                     fontStretch: "condensed",
                   }}
@@ -297,7 +288,7 @@ export default function AboutPage() {
           <div className="max-w-[600px] mx-auto flex flex-wrap items-center justify-center gap-8">
             <Link href="/book-a-demo">
               <SweepButton
-                label="Book Free Demo"
+                label="Map My Workflow"
                 defaultIcon="/book.svg"
                 hoverIcon="/book1.svg"
               />

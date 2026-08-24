@@ -220,7 +220,8 @@ export default BentoCard;
 interface BentoStatPanelProps {
   statLabel: string;
   statValue: string;
-  statProgress: number;
+  /** Optional — omit when no verified metric exists (bar is hidden). */
+  statProgress?: number;
   statSub: string;
   watermarkIcon: IconType;
   chips: { value: string; label: string; icon: IconType }[];
@@ -264,17 +265,19 @@ export function BentoStatPanel({
             >
               {statValue}
             </span>
-            <div
-              className="w-full h-1 rounded-full overflow-hidden mt-1"
-              style={{ background: "var(--surface)" }}
-            >
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${statProgress}%` }}
-                transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-                className="h-full bg-[var(--accent)] rounded-full"
-              />
-            </div>
+            {statProgress !== undefined && (
+              <div
+                className="w-full h-1 rounded-full overflow-hidden mt-1"
+                style={{ background: "var(--surface)" }}
+              >
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${statProgress}%` }}
+                  transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+                  className="h-full bg-[var(--accent)] rounded-full"
+                />
+              </div>
+            )}
           </div>
           <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
             {statSub}

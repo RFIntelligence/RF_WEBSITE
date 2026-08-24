@@ -169,7 +169,7 @@ void main(void) {
       1,
       10000,
     );
-    const clock = new THREE.Clock();
+    let lastFrameTime = performance.now();
     const plane = new Plane();
 
     const resize = () => {
@@ -192,7 +192,10 @@ void main(void) {
     let rafId: number;
 
     const tick = () => {
-      plane.render(clock.getDelta());
+      const now = performance.now();
+      const delta = (now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+      plane.render(delta);
       renderer.render(scene, camera);
     };
 

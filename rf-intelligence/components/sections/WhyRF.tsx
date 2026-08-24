@@ -399,7 +399,7 @@ export function WhyRF() {
           </p>
           <Link href="/book-a-demo">
             <SweepButton
-              label="Book Free Demo"
+              label="Map My Workflow"
               defaultIcon="/book.svg"
               hoverIcon="/book1.svg"
             />
