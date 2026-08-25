@@ -104,9 +104,9 @@ export function SendButton({ sent, disabled }: SendButtonProps) {
 
 const StyledWrapper = styled.div`
   .button {
-    --primary: #f24e4b;
-    --neutral-1: #f7f8f7;
-    --neutral-2: #e7e7e7;
+    --primary: #000000;
+    --neutral-1: #ff5a57;
+    --neutral-2: #d93835;
     --radius: 14px;
 
     cursor: pointer;
