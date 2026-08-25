@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useMemo, useEffect } from "react";
+import { useRef, useMemo, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
@@ -249,17 +248,31 @@ export function GeometricOrb({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const config = useMemo(() => ({ ...defaults, ...configOverrides }), [configKey]);
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  // Pause the render loop entirely while the orb is offscreen — keeps page scroll smooth.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: "100px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className={`w-full h-full ${className}`} style={{ background: config.background }}>
-      <Canvas camera={{ position: [0, 0, 8], fov: 45 }} gl={{ antialias: true, alpha: false }}>
+    <div ref={wrapperRef} className={`w-full h-full ${className}`} style={{ background: config.background }}>
+      <Canvas
+        camera={{ position: [0, 0, 8], fov: 45 }}
+        gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
+        dpr={[1, 1.5]}
+        frameloop={inView ? "always" : "never"}
+      >
         <color attach="background" args={[config.background]} />
         <LatitudeLines config={config} />
-        <OrbitControls
-          enablePan={config.enablePan}
-          enableZoom={config.enableZoom}
-          minDistance={config.minDistance}
-          maxDistance={config.maxDistance}
-        />
       </Canvas>
     </div>
   );
