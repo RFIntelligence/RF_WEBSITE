@@ -288,10 +288,11 @@ export function NavbarButton({
     );
   }
 
+  const Component = Tag as any;
   return (
-    <Tag {...props}>
+    <Component {...props}>
       {children}
-    </Tag>
+    </Component>
   );
 }
 
