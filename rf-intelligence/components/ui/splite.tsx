@@ -63,6 +63,31 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
   // Only mount the viewer once its container has a real size — initializing
   // WebGPU against a 0x0 canvas throws GPUValidationError spam in the console.
   const [hasSize, setHasSize] = useState(false);
+  // Lazily load the viewer the first time the footer approaches the viewport.
+  // It stays mounted afterwards: repeatedly mounting/unmounting the viewer
+  // re-initializes its WebGPU surface mid-frame and spams GPUValidationErrors
+  // ("swapchain texture of size 0"), and reloading the .splinecode scene is
+  // far more expensive than letting its RAF loop idle.
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (shouldLoad) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      // Start loading well before the footer scrolls into view so the
+      // scene is ready by the time the user reaches it.
+      { rootMargin: "600px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -103,7 +128,7 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
 
   return (
     <div ref={wrapperRef} className="relative w-full h-full">
-      {(!ready || !hasSize) && (
+      {shouldLoad && (!ready || !hasSize) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             aria-hidden="true"
@@ -115,7 +140,7 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
           />
         </div>
       )}
-      {hasSize && (
+      {hasSize && shouldLoad && (
         <spline-viewer
           ref={viewerRef}
           url={scene}
