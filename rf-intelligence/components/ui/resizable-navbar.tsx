@@ -100,10 +100,23 @@ interface NavItemsProps {
   items: NavItem[];
   className?: string;
   onItemClick?: () => void;
+  /** Link whose section is currently in view — wears the hover state */
+  activeLink?: string;
 }
 
-export function NavItems({ items, className = "", onItemClick }: NavItemsProps) {
+export function NavItems({
+  items,
+  className = "",
+  onItemClick,
+  activeLink = "",
+}: NavItemsProps) {
   const [hovered, setHovered] = useState<number | null>(null);
+
+  // The active item rests in the hover state whenever nothing else is hovered
+  const activeIdx = activeLink
+    ? items.findIndex((item) => item.link === activeLink)
+    : -1;
+  const effective = hovered ?? activeIdx;
 
   return (
     <ul
@@ -116,6 +129,7 @@ export function NavItems({ items, className = "", onItemClick }: NavItemsProps) 
         // "About RF" and "Why RF": only "RF" turns #FA504D on hover.
         const splitRF = item.name === "About RF" || item.name === "Why RF";
         const parts = splitRF ? item.name.split(" ") : null;
+        const isActive = effective === idx;
 
         return (
           <li key={item.link} className="relative">
@@ -123,12 +137,15 @@ export function NavItems({ items, className = "", onItemClick }: NavItemsProps) 
               href={item.link}
               onClick={onItemClick}
               onMouseEnter={() => setHovered(idx)}
+              aria-current={idx === activeIdx ? "true" : undefined}
               className={[
                 "relative px-3.5 py-2 rounded-full",
                 "text-[0.9375rem] font-medium leading-none",
                 "transition-colors duration-200",
                 !splitRF
-                  ? "text-[var(--text-secondary)] hover:text-[#FA504D]"
+                  ? isActive
+                    ? "text-[#FA504D]"
+                    : "text-[var(--text-secondary)] hover:text-[#FA504D]"
                   : "text-[var(--text-secondary)]",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]",
                 // group so child spans react to the link's hover state
@@ -137,8 +154,8 @@ export function NavItems({ items, className = "", onItemClick }: NavItemsProps) 
                 .filter(Boolean)
                 .join(" ")}
             >
-              {/* Animated hover background pill */}
-              {hovered === idx && (
+              {/* Animated hover background pill — rests on the active item */}
+              {isActive && (
                 <motion.span
                   layoutId="nav-pill"
                   className="absolute inset-0 rounded-full bg-[var(--surface-elevated)]"
@@ -151,8 +168,15 @@ export function NavItems({ items, className = "", onItemClick }: NavItemsProps) 
                 <>
                   {/* First word: stays default color always */}
                   <span>{parts[0]}&nbsp;</span>
-                  {/* "RF": turns #FA504D when anywhere on the parent link is hovered */}
-                  <span className="transition-colors duration-200 group-hover:text-[#FA504D]">
+                  {/* "RF": turns #FA504D on hover or while its section is active */}
+                  <span
+                    className={[
+                      "transition-colors duration-200 group-hover:text-[#FA504D]",
+                      isActive ? "text-[#FA504D]" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
                     {parts[1]}
                   </span>
                 </>
