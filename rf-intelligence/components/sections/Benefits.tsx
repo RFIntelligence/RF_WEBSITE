@@ -110,26 +110,26 @@ function BenefitCard({
   const isRed = tone === "red";
   return (
     <article
-      className={`h-72 w-[min(30rem,88vw)] rounded-xl p-8 grid place-content-center gap-3 shadow-2xl shadow-black/60 ${rotation}`}
+      className={`h-[24rem] w-[min(42rem,90vw)] rounded-xl p-10 md:p-12 grid place-content-center gap-4 shadow-2xl shadow-black/60 ${rotation}`}
       style={{
         backgroundColor: isRed ? RED_DEEP : BLACK_DEEP,
         border: `1px solid ${isRed ? "rgba(255, 255, 255, 0.28)" : "var(--border-strong)"}`,
       }}
     >
       <span
-        className="text-xs font-medium"
+        className="text-sm font-medium"
         style={{ color: isRed ? SALMON : "var(--accent)", fontFamily: MONO }}
       >
         {num}
       </span>
       <h3
         className="font-semibold tracking-tight m-0"
-        style={{ fontSize: "clamp(1.25rem, 2vw, 1.75rem)", color: INK }}
+        style={{ fontSize: "clamp(1.5rem, 2.5vw, 2.25rem)", color: INK }}
       >
         {title}
       </h3>
       <p
-        className="text-sm md:text-base leading-relaxed m-0"
+        className="text-base md:text-lg leading-relaxed m-0 max-w-[52ch]"
         style={{ color: INK_SOFT }}
       >
         {body}
