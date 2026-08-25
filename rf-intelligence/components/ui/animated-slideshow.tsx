@@ -55,7 +55,7 @@ export const HoverSlider = React.forwardRef<
   )
   return (
     <HoverSliderContext.Provider value={{ activeSlide, changeSlide }}>
-      <div className={className}>{children}</div>
+      <div ref={ref as React.Ref<HTMLDivElement>} className={className} {...props}>{children}</div>
     </HoverSliderContext.Provider>
   )
 })
@@ -68,7 +68,8 @@ const WordStaggerHover = React.forwardRef<
 >(({ children, className, ...props }, ref) => {
   return (
     <span
-      className={cn("relative inline-block origin-bottom overflow-hidden")}
+      ref={ref}
+      className={cn("relative inline-block origin-bottom overflow-hidden", className)}
       {...props}
     >
       {children}
@@ -81,7 +82,7 @@ WordStaggerHover.displayName = "WordStaggerHover"
 export const TextStaggerHover = React.forwardRef<
   HTMLElement,
   React.HTMLAttributes<HTMLElement> & TextStaggerHoverProps
->(({ text, index, children, className, ...props }, ref) => {
+>(({ text, index, className, ...props }, ref) => {
   const { activeSlide, changeSlide } = useHoverSliderContext()
   const { characters } = splitText(text)
   const isActive = activeSlide === index
@@ -163,11 +164,12 @@ HoverSliderImageWrap.displayName = "HoverSliderImageWrap"
 export const HoverSliderImage = React.forwardRef<
   HTMLImageElement,
   HTMLMotionProps<"img"> & HoverSliderImageProps
->(({ index, imageUrl, children, className, ...props }, ref) => {
+>(({ index, imageUrl, className, ...props }, ref) => {
   const { activeSlide } = useHoverSliderContext()
   return (
     <motion.img
       className={cn("inline-block align-middle", className)}
+      src={imageUrl}
       transition={{ ease: [0.33, 1, 0.68, 1], duration: 0.8 }}
       variants={clipPathVariants}
       animate={activeSlide === index ? "visible" : "hidden"}

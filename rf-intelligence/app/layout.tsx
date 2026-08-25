@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Playfair_Display,
+  Stack_Sans_Text,
+} from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-context";
 
@@ -17,6 +22,12 @@ const geistMono = Geist_Mono({
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const stackSansText = Stack_Sans_Text({
+  variable: "--font-stack-sans-text",
   subsets: ["latin"],
   display: "swap",
 });
@@ -41,12 +52,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Stack+Sans+Text:wght@200..700&display=swap" rel="stylesheet" />
-      </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${stackSansText.variable} antialiased`}
+      >
+        {/* Warm up the Spline CDNs early so the footer robot is already
+            loading while the user scrolls, instead of starting cold. */}
+        <link rel="preconnect" href="https://unpkg.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://prod.spline.design"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="modulepreload"
+          href="https://unpkg.com/@splinetool/viewer/build/spline-viewer.js"
+        />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

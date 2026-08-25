@@ -104,7 +104,7 @@ export function Hero() {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="flex flex-wrap items-center justify-center gap-8"
           >
-            <Link href="/book-a-demo">
+            <Link href="/#contact">
               <SweepButton
                 label="Book Free Demo"
                 defaultIcon="/book.svg"

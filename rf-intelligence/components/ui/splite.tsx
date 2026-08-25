@@ -10,7 +10,6 @@
 
 import React, { useEffect, useState } from "react";
 
-// eslint-disable-next-line @typescript-eslint/no-namespace -- required to type the spline-viewer custom element for JSX
 declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
@@ -25,6 +24,29 @@ declare module "react" {
 const VIEWER_SCRIPT =
   "https://unpkg.com/@splinetool/viewer/build/spline-viewer.js";
 
+/**
+ * Kick off the viewer download as early as possible — at module evaluation
+ * time, before React hydration runs effects. This shaves the CDN round-trip
+ * off the footer robot's perceived loading time.
+ */
+function injectViewerScript() {
+  if (typeof window === "undefined") return;
+  if (customElements.get("spline-viewer")) return;
+  if (document.querySelector(`script[src="${VIEWER_SCRIPT}"]`)) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = VIEWER_SCRIPT;
+  document.head.appendChild(script);
+}
+
+if (typeof window !== "undefined") {
+  // Run on import; also retry after hydration in case of early module eval
+  injectViewerScript();
+  window.addEventListener("DOMContentLoaded", injectViewerScript, {
+    once: true,
+  });
+}
+
 interface SplineSceneProps {
   scene: string;
   className?: string;
@@ -32,22 +54,39 @@ interface SplineSceneProps {
 
 export function SplineScene({ scene, className }: SplineSceneProps) {
   const viewerRef = React.useRef<HTMLElement>(null);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(
     () =>
       typeof window !== "undefined" &&
       Boolean(customElements.get("spline-viewer")),
   );
+  // Only mount the viewer once its container has a real size — initializing
+  // WebGPU against a 0x0 canvas throws GPUValidationError spam in the console.
+  const [hasSize, setHasSize] = useState(false);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) setHasSize(true);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (ready) return;
-    const script = document.createElement("script");
-    script.type = "module";
-    script.src = VIEWER_SCRIPT;
-    script.onload = () => setReady(true);
-    document.head.appendChild(script);
-    return () => {
-      script.remove();
-    };
+    injectViewerScript();
+    // Poll for the custom element's definition (the injected module script
+    // resolves it asynchronously) instead of duplicating the script tag.
+    const interval = setInterval(() => {
+      if (customElements.get("spline-viewer")) {
+        setReady(true);
+        clearInterval(interval);
+      }
+    }, 80);
+    return () => clearInterval(interval);
   }, [ready]);
 
   // Remove the "Built with Spline" badge inside the viewer's shadow DOM
@@ -63,8 +102,8 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
   }, [ready]);
 
   return (
-    <div className="relative w-full h-full">
-      {!ready && (
+    <div ref={wrapperRef} className="relative w-full h-full">
+      {(!ready || !hasSize) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             aria-hidden="true"
@@ -76,12 +115,14 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
           />
         </div>
       )}
-      <spline-viewer
-        ref={viewerRef}
-        url={scene}
-        className={className}
-        style={{ opacity: ready ? 1 : 0, transition: "opacity 0.4s ease" }}
-      />
+      {hasSize && (
+        <spline-viewer
+          ref={viewerRef}
+          url={scene}
+          className={className}
+          style={{ opacity: ready ? 1 : 0, transition: "opacity 0.4s ease" }}
+        />
+      )}
     </div>
   );
 }

@@ -286,7 +286,7 @@ export default function AboutPage() {
           style={{ background: "#0A0A0A" }}
         >
           <div className="max-w-[600px] mx-auto flex flex-wrap items-center justify-center gap-8">
-            <Link href="/book-a-demo">
+            <Link href="/#contact">
               <SweepButton
                 label="Map My Workflow"
                 defaultIcon="/book.svg"
