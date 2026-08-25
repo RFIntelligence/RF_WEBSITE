@@ -2,7 +2,13 @@
 
 import { ArrowRight, Activity } from "lucide-react";
 import Link from "next/link";
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import styled from "styled-components";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -36,17 +42,17 @@ function useInView(ref: React.RefObject<HTMLElement | null>, threshold = 0.2) {
 
 /** Detects prefers-reduced-motion */
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
+  const subscribe = useCallback((onStoreChange: () => void) => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    mq.addEventListener("change", onStoreChange);
+    return () => mq.removeEventListener("change", onStoreChange);
   }, []);
 
-  return reduced;
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => false,
+  );
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -326,7 +332,7 @@ export function AboutBento() {
           className="md:col-span-2"
           style={fadeUpStyle(3)}
           as={Link}
-          href="/book-a-demo"
+          href="/#contact"
         >
           <GlowCardContent
             $bg="#E63946"

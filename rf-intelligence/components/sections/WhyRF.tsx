@@ -397,7 +397,7 @@ export function WhyRF() {
             we&apos;ll map how RF would run it end-to-end. Free, no
             commitment.
           </p>
-          <Link href="/book-a-demo">
+          <Link href="/#contact">
             <SweepButton
               label="Map My Workflow"
               defaultIcon="/book.svg"

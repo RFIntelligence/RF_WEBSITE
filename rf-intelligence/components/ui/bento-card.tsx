@@ -107,6 +107,7 @@ const BentoCard = ({
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab)}
+                        suppressHydrationWarning
                         className={cn(
                           "relative flex items-center gap-1.5 p-2 rounded-xl text-xs transition-colors cursor-pointer",
                           isActive ? "" : "hover:text-[var(--text-primary)]",

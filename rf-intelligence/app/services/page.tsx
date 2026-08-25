@@ -107,7 +107,7 @@ export default function ServicesPage() {
             We&apos;ll map your workflows, find the highest-leverage
             automation, and show you a working demo — free.
           </p>
-          <Link href="/book-a-demo">
+          <Link href="/#contact">
             <SweepButton label="Book Free Demo" defaultIcon="/book.svg" hoverIcon="/book1.svg" />
           </Link>
         </section>

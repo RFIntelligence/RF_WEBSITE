@@ -15,6 +15,19 @@ import { ReactLenis, useLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import dynamic from "next/dynamic";
+
+// Dynamically import the GLSL canvas — avoids SSR, loads asynchronously
+const GLSLHills = dynamic(
+  () => import("@/components/canvas/GLSLHills").then((m) => m.GLSLHills),
+  {
+    ssr: false,
+    loading: () => (
+      // CSS fallback while the Three.js canvas mounts — matches the section bg
+      <div className="w-full h-full" style={{ background: BLACK_DEEP }} aria-hidden="true" />
+    ),
+  },
+);
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -140,7 +153,16 @@ function BenefitCard({
 
 function BenefitsContent() {
   return (
-    <div className="w-full" style={{ background: BLACK_DEEP }}>
+    <div className="relative w-full" style={{ background: BLACK_DEEP }}>
+      {/* ── GLSL hills canvas — full section background ── */}
+      <div aria-hidden="true" className="absolute inset-0 z-0 pointer-events-none">
+        {/* sticky keeps the canvas viewport-sized while the section scrolls */}
+        <div className="sticky top-0 h-screen w-full overflow-hidden">
+          <GLSLHills className="w-full h-full" />
+        </div>
+      </div>
+
+      <div className="relative z-10">
       {/* ── Intro screen ── */}
       <section
         aria-labelledby="benefits-headline"
@@ -260,6 +282,7 @@ function BenefitsContent() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

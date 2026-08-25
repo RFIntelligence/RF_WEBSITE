@@ -6,6 +6,7 @@ import { WhyRF } from "@/components/sections/WhyRF";
 import { Benefits } from "@/components/sections/Benefits";
 import { Footer } from "@/components/sections/Footer";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
+import { ContactUs } from "@/components/sections/ContactUs";
 
 export default function HomePage() {
   return (
@@ -29,6 +30,10 @@ export default function HomePage() {
       {/* ── How It Works — reachable by scrolling the home page, in nav order ── */}
       <div id="how-it-works" aria-hidden="true" />
       <HowItWorksSection />
+
+      {/* ── Contact Us — between How It Works and the Footer ── */}
+      <div id="contact" aria-hidden="true" />
+      <ContactUs />
 
       <Footer />
 

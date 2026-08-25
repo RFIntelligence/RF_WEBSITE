@@ -1,8 +1,10 @@
-// Phase 17 — Contact page (placeholder)
+// Phase 17 — Contact page: reuses the homepage contact section.
+import { ContactUs } from "@/components/sections/ContactUs";
+
 export default function ContactPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <p className="text-[var(--text-secondary)]">Contact — coming soon.</p>
+    <main>
+      <ContactUs />
     </main>
   );
 }

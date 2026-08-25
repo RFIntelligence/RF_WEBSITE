@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { name: "Why RF",       link: "/#why-rf"     },
   { name: "Benefits",     link: "/#benefits"   },
   { name: "How It Works", link: "/#how-it-works"},
+  { name: "Book Demo",    link: "/#contact"    },
 ];
 
 /**
@@ -86,7 +87,7 @@ function BookDemoCTA({
   onClick?: () => void;
 }) {
   return (
-    <Link href="/book-a-demo" onClick={onClick} className={className}>
+    <Link href="/#contact" onClick={onClick} className={className}>
       <NavbarButton variant="primary">
         {/* Split label so "Free" can be individually underlined on hover */}
         <span>Book Demo For&nbsp;</span>

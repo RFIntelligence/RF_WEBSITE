@@ -28,6 +28,7 @@ export function SweepButton({ label, defaultIcon, hoverIcon, onClick }: SweepBut
   return (
     <button
       onClick={onClick}
+      suppressHydrationWarning
       className={[
         // Layout
         "group relative inline-flex items-center gap-2",

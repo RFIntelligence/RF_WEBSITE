@@ -553,6 +553,7 @@ function TitleButton({
     <button
       type="button"
       onClick={() => changeSlide(index)}
+      suppressHydrationWarning
       className="group text-left w-fit cursor-pointer focus-visible:outline-offset-8"
       aria-label={`Show ${service.title} details`}
     >

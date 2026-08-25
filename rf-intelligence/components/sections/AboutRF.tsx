@@ -53,7 +53,7 @@ export function AboutRF() {
 
             {/* CTA */}
             <div className="flex flex-wrap items-center gap-5 mt-6">
-              <Link href="/book-a-demo">
+              <Link href="/#contact">
                 <SweepButton
                   label="Book Free Demo"
                   defaultIcon="/book.svg"
@@ -133,7 +133,7 @@ const StyledWrapper = styled.div`
   }
 
   .card-label {
-    font-family: 'Stack Sans Text', sans-serif;
+    font-family: var(--font-stack-sans-text), 'Stack Sans Text', sans-serif;
     font-size: 19px;
     font-weight: 500;
     letter-spacing: -0.01em;
