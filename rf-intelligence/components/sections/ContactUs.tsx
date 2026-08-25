@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { SendButton } from "@/components/ui/SendButton";
+import { GeometricOrb } from "@/components/ui/geometric-orb";
 
 /**
  * ContactUs — homepage section between How It Works and Footer.
@@ -178,32 +179,20 @@ export function ContactUs() {
 
       {/* ── Content: 3D placeholder left, form right ── */}
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-8 pb-24 md:pb-32 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        {/* ── Left: 3D component slot ── */}
-        <div className="relative min-h-[320px] md:min-h-[440px] order-last lg:order-first">
-          {/*
-            3D COMPONENT SLOT
-            Replace this block with the Spline/Three.js scene, e.g.
-            <SplineScene scene="..." className="w-full h-full" />
-          */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 rounded-xl flex items-center justify-center"
-            style={{
-              border: "1px dashed var(--border-strong)",
-              background:
-                "radial-gradient(ellipse at center, rgba(242,78,75,0.06) 0%, transparent 70%)",
+        {/* ── Left: 3D geometric orb ── */}
+        <div className="relative min-h-[320px] md:min-h-[440px] order-last lg:order-first m-0 p-0">
+          <GeometricOrb
+            className="absolute inset-0 rounded-xl overflow-hidden"
+            config={{
+              background: "#05060A",
+              color: "#F24E4B",
+              numLines: 24,
+              lineWidth: 2,
+              radius: 3,
+              enableZoom: false,
+              enablePan: false,
             }}
-          >
-            <p
-              className="m-0 text-xs uppercase tracking-[0.2em]"
-              style={{
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
-              }}
-            >
-              3D Component Slot
-            </p>
-          </div>
+          />
         </div>
 
         {/* ── Right: contact form ── */}
