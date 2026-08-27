@@ -12,7 +12,7 @@ import { SplineScene } from "@/components/ui/splite";
  */
 
 const COMPANY_LINKEDIN = "https://www.linkedin.com/company/rfintelligence/";
-const FOUNDER_LINKEDIN =
+const FOUNDERS_LINKEDIN =
   "https://www.linkedin.com/in/avinash-gantotti-669b83243/";
 const CONTACT_EMAIL = "Intelligencerf@gmail.com";
 
@@ -55,39 +55,81 @@ export function Footer() {
               </p>
             </div>
 
-            {/* Founder */}
-            <div className="flex items-center gap-4">
-              <Image
-                src="/founder.png"
-                alt="Avinash Gantotti — Founder, RF Intelligence"
-                width={64}
-                height={64}
-                className="rounded-full object-cover"
-                style={{ border: "1px solid var(--border-strong)" }}
-              />
-              <div>
-                <p
-                  className="font-medium m-0"
-                  style={{ fontSize: "1rem", color: "#F5F1EC" }}
-                >
-                  Avinash Gantotti
-                </p>
-                <p
-                  className="text-xs m-0 mt-1 uppercase tracking-[0.15em]"
+            {/* Founders */}
+            <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+              {/* Avinash Gantotti */}
+              <div className="flex items-center gap-4">
+                <Image
+                  src="/founder.png"
+                  alt="Avinash Gantotti — Co-Founder, RF Intelligence"
+                  width={64}
+                  height={64}
+                  className="rounded-full object-cover"
                   style={{
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-geist-mono, monospace)",
+                    width: "64px",
+                    height: "64px",
+                    objectFit: "cover",
+                    border: "1px solid var(--border-strong)",
                   }}
-                >
-                  Founder
-                </p>
+                />
+                <div>
+                  <p
+                    className="font-medium m-0"
+                    style={{ fontSize: "1rem", color: "#F5F1EC" }}
+                  >
+                    Avinash Gantotti
+                  </p>
+                  <p
+                    className="text-xs m-0 mt-1 uppercase tracking-[0.15em]"
+                    style={{
+                      color: "var(--accent)",
+                      fontFamily: "var(--font-geist-mono, monospace)",
+                    }}
+                  >
+                    Co-Founder
+                  </p>
+                </div>
+              </div>
+
+              {/* Sharan George */}
+              <div className="flex items-center gap-4">
+                <Image
+                  src="/founder1.png"
+                  alt="Sharan George — Co-Founder, RF Intelligence"
+                  width={64}
+                  height={64}
+                  className="rounded-full object-cover"
+                  style={{
+                    width: "64px",
+                    height: "64px",
+                    objectFit: "cover",
+                    border: "1px solid var(--border-strong)",
+                  }}
+                />
+                <div>
+                  <p
+                    className="font-medium m-0"
+                    style={{ fontSize: "1rem", color: "#F5F1EC" }}
+                  >
+                    Sharan George
+                  </p>
+                  <p
+                    className="text-xs m-0 mt-1 uppercase tracking-[0.15em]"
+                    style={{
+                      color: "var(--accent)",
+                      fontFamily: "var(--font-geist-mono, monospace)",
+                    }}
+                  >
+                    Co-Founder
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Contact actions */}
             <div className="flex flex-wrap items-center gap-4">
               <a
-                href={FOUNDER_LINKEDIN}
+                href={FOUNDERS_LINKEDIN}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-colors duration-200 hover:opacity-90"
@@ -96,7 +138,7 @@ export function Footer() {
                   color: "var(--accent-foreground)",
                 }}
               >
-                Talk to Founder
+                Talk to Founders
               </a>
 
               <a
