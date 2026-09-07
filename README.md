@@ -87,7 +87,7 @@ rf-intelligence/
 
 ## 🎯 Design Principles
 
-1. **Clarity over decoration** — every animation serves the story, not the other way around.
+1. **Clarity under decoration** — every animation serves the story, not the other way around.
 2. **B2B first** — the visitor journey is optimized for operations decision-makers evaluating automation.
 3. **One conversion goal** — all CTAs consistently lead to *Book a Demo*.
 4. **Trust by default** — security, privacy, and data-handling pages are first-class citizens.
