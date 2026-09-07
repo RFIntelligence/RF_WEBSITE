@@ -3,7 +3,11 @@ import { MetadataRoute } from "next";
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.rfintelligenceco.com";
 
-  const routes = [
+  const routes: Array<{
+    path: string;
+    changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
+    priority: number;
+  }> = [
     { path: "", changeFrequency: "weekly", priority: 1.0 },
     { path: "/about", changeFrequency: "monthly", priority: 0.8 },
     { path: "/services", changeFrequency: "monthly", priority: 0.8 },
