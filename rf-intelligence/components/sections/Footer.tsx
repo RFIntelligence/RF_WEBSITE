@@ -13,7 +13,7 @@ import { SplineScene } from "@/components/ui/splite";
 
 const COMPANY_LINKEDIN = "https://www.linkedin.com/company/rfintelligence/";
 const FOUNDERS_LINKEDIN =
-  "https://www.linkedin.com/in/avinash-gantotti-669b83243/";
+  "https://www.linkedin.com/company/rfintelligence/posts/?feedView=all";
 const CONTACT_EMAIL = "Intelligencerf@gmail.com";
 
 const MAILTO_HREF = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(

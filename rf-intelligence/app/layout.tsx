@@ -32,6 +32,8 @@ const stackSansText = Stack_Sans_Text({
   display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.rfintelligenceco.com";
+
 export const metadata: Metadata = {
   title: {
     default: "RF Intelligence — AI-Powered Business Automation",
@@ -40,13 +42,35 @@ export const metadata: Metadata = {
   description:
     "RF Intelligence is an AI automation company that helps businesses transform repetitive operational workflows into intelligent, automated systems.",
   icons: {
+<<<<<<< HEAD
     icon: "/logo.png",
     shortcut: "/logo.png",
     apple: "/logo.png",
+=======
+    icon: [{ url: "/logo.png", type: "image/png" }],
+    shortcut: "/logo.png",
+    apple: [{ url: "/logo.png", type: "image/png" }],
+>>>>>>> 83b1610319ea6d891d531c3137067e2f970de23a
   },
   openGraph: {
     siteName: "RF Intelligence",
     type: "website",
+    url: siteUrl,
+    images: [
+      {
+        url: `${siteUrl}/logo.png`,
+        width: 1536,
+        height: 1024,
+        alt: "RF Intelligence logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RF Intelligence — AI-Powered Business Automation",
+    description:
+      "RF Intelligence is an AI automation company that helps businesses transform repetitive operational workflows into intelligent, automated systems.",
+    images: [`${siteUrl}/logo.png`],
   },
 };
 

@@ -200,7 +200,7 @@ export function AboutBento() {
   return (
     <div className="mt-20 md:mt-28" ref={sectionRef}>
       {/* ── Bento Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {/* ─── Feature Card (large, spans 2 cols × 2 rows) ─── */}
         <GlowCard
           $bg="#1A1414"
@@ -264,6 +264,7 @@ export function AboutBento() {
         <GlowCard
           $bg="#E63946"
           $glowColors="linear-gradient(#F5F1EC, #FFFFFF)"
+          className="md:col-span-2"
           style={cardEntryStyle(1)}
         >
           <GlowCardContent
@@ -277,9 +278,9 @@ export function AboutBento() {
               How we build
             </span>
 
-            <div className="space-y-2 mt-6">
+            <div className="space-y-2 mt-6 pr-4">
               <span
-                className="text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.05]"
+                className="text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.05] break-words"
                 style={{ color: "#0A0A0A" }}
               >
                 Workflow-first
@@ -329,7 +330,7 @@ export function AboutBento() {
         <GlowCard
           $bg="#E63946"
           $glowColors="linear-gradient(#F5F1EC, #FFFFFF)"
-          className="md:col-span-2"
+          className="md:col-span-3"
           style={fadeUpStyle(3)}
           as={Link}
           href="/#contact"
