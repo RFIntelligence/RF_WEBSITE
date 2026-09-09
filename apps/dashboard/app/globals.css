@@ -1,0 +1,100 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Red brand scale */
+  --color-red-50: #FA504D;
+  --color-red-100: #F24E4B;
+  --color-red-200: #CF4240;
+  --color-red-300: #AD3836;
+  --color-red-400: #8C2D2B;
+  --color-red-500: #692220;
+
+  /* Dark theme (default) */
+  --color-background: #05060A;
+  --color-surface: #0D0E12;
+  --color-surface-elevated: #15161C;
+  --color-text-primary: #F5F5F0;
+  --color-text-secondary: rgba(245, 245, 240, 0.7);
+  --color-text-muted: rgba(245, 245, 240, 0.45);
+  --color-accent: #F24E4B;
+  --color-accent-hover: #FA504D;
+  --color-accent-deep: #692220;
+  --color-accent-foreground: #0D0E12;
+  --color-border: rgba(245, 245, 240, 0.08);
+  --color-border-strong: rgba(245, 245, 240, 0.16);
+  --color-focus-ring: #F24E4B;
+  --color-glass-bg: rgba(13, 14, 18, 0.72);
+  --color-glass-blur: 12px;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-xslow: 600ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+[data-theme="light"] {
+  --color-background: #F8F8F6;
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;
+  --color-text-primary: #0F0F0E;
+  --color-text-secondary: rgba(15, 15, 14, 0.65);
+  --color-text-muted: rgba(15, 15, 14, 0.40);
+  --color-accent: #D63E3B;
+  --color-accent-hover: #F24E4B;
+  --color-accent-foreground: #FFFFFF;
+  --color-border: rgba(15, 15, 14, 0.12);
+  --color-border-strong: rgba(15, 15, 14, 0.22);
+  --color-focus-ring: #D63E3B;
+  --color-glass-bg: rgba(255, 255, 255, 0.80);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
