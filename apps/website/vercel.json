@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "installCommand": "cd ../.. && pnpm install --registry https://registry.npmjs.org",
+  "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "cd ../.. && pnpm --filter rf-intelligence build",
   "outputDirectory": ".next"
 }
