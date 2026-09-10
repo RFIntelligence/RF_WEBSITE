@@ -62,7 +62,8 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
   );
   // Only mount the viewer once its container has a real size — initializing
   // WebGPU against a 0x0 canvas throws GPUValidationError spam in the console.
-  const [hasSize, setHasSize] = useState(false);
+  const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
+  const hasSize = dimensions !== null;
   // Lazily load the viewer the first time the footer approaches the viewport.
   // It stays mounted afterwards: repeatedly mounting/unmounting the viewer
   // re-initializes its WebGPU surface mid-frame and spams GPUValidationErrors
@@ -94,7 +95,16 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) setHasSize(true);
+      if (width > 0 && height > 0) {
+        setDimensions((prev) => {
+          // Only update if the size actually changes to avoid triggering
+          // a viewer remount when the resize is trivially small.
+          if (prev && Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) {
+            return prev;
+          }
+          return { w: Math.round(width), h: Math.round(height) };
+        });
+      }
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -145,7 +155,15 @@ export function SplineScene({ scene, className }: SplineSceneProps) {
           ref={viewerRef}
           url={scene}
           className={className}
-          style={{ opacity: ready ? 1 : 0, transition: "opacity 0.4s ease" }}
+          // Explicit pixel dimensions prevent the web component from
+          // reading offsetWidth/offsetHeight before layout settles and
+          // initialising its WebGPU swapchain at size 0.
+          style={{
+            width: dimensions!.w,
+            height: dimensions!.h,
+            opacity: ready ? 1 : 0,
+            transition: "opacity 0.4s ease",
+          }}
         />
       )}
     </div>
