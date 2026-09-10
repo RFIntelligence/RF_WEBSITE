@@ -42,9 +42,13 @@ export const metadata: Metadata = {
   description:
     "RF Intelligence is an AI automation company that helps businesses transform repetitive operational workflows into intelligent, automated systems.",
   icons: {
-    icon: [{ url: "/logo.png", type: "image/png" }],
+    icon: [
+      { url: "/logo.png", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+    ],
     shortcut: "/logo.png",
-    apple: [{ url: "/logo.png", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
   },
   openGraph: {
     siteName: "RF Intelligence",
