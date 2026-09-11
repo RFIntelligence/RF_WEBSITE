@@ -41,15 +41,13 @@ export const metadata: Metadata = {
   },
   description:
     "RF Intelligence is an AI automation company that helps businesses transform repetitive operational workflows into intelligent, automated systems.",
-  icons: {
-    icon: [
-      { url: "/logo.png", type: "image/png" },
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.png", type: "image/png" },
-    ],
-    shortcut: "/logo.png",
-    apple: [{ url: "/apple-icon.png", type: "image/png" }],
-  },
+  // Icons are declared via file conventions only:
+  //   app/favicon.ico      → <link rel="icon" href="/favicon.ico" sizes="any" />
+  //   app/icon.png         → <link rel="icon" href="/icon.png" type="image/png" sizes="…" />
+  //   app/apple-icon.png   → <link rel="apple-touch-icon" … />
+  // Declaring them here again via metadata.icons would create duplicate <link>
+  // tags and the two declarations can disagree, causing browsers to pick the
+  // wrong one. Let the file-convention layer be the single source of truth.
   openGraph: {
     siteName: "RF Intelligence",
     type: "website",
@@ -79,6 +77,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/*
+          Explicit fallback <link> tags.
+          Next.js file-convention icons (app/favicon.ico, app/icon.png,
+          app/apple-icon.png) already emit the correct <link> tags
+          automatically. These are belt-and-suspenders for Vercel's CDN
+          edge cache, which occasionally serves a stale <head> on first
+          deploy until the cache purges.
+        */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/icon.png" type="image/png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${stackSansText.variable} antialiased`}
       >
