@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import {
   metricCards,
   activeProjects,
@@ -16,31 +19,49 @@ import { RecentMessages }      from "@/app/components/dashboard/recent-messages"
 import { QuickActionsRow }     from "@/app/components/dashboard/quick-actions-row";
 import { Separator }           from "@/app/components/ui/separator";
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-// Layout (1440 reference):
-//
-//  ┌─────────────────────────────────────────────────────────────────────────┐
-//  │  Greeting + eyebrow                                                     │
-//  ├─────────────────────────────────────────────────────────────────────────┤
-//  │  Quick-actions row (5 icon buttons)                                     │
-//  ├─────────────────────────────────────────────────────────────────────────┤
-//  │  Metric cards (5 across, responsive auto-fill)                          │
-//  ├─────────────────────────────────────────────────────────────────────────┤
-//  │  Alerts (full-width, collapses when all dismissed)                      │
-//  ├──────────────────────────────────┬──────────────────────────────────────┤
-//  │  Active Projects (left, 2/3)     │  Ask RF Widget + Recent Messages     │
-//  │  Insights Feed (left, 2/3)       │  (right sidebar, 1/3)                │
-//  └──────────────────────────────────┴──────────────────────────────────────┘
-
 export default function DashboardPage() {
-  const firstName = currentUser.name.split(" ")[0];
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Hour-of-day greeting (server-rendered at request time)
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 350);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const firstName = currentUser.name.split(" ")[0];
   const hour = new Date().getUTCHours();
   const greeting =
     hour < 12 ? "Good morning" :
     hour < 17 ? "Good afternoon" :
                 "Good evening";
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-[1200px] space-y-8 animate-pulse">
+        <div className="space-y-2">
+          <div className="h-4 w-24 bg-[var(--surface-elevated)] rounded" />
+          <div className="h-7 w-48 bg-[var(--surface-elevated)] rounded" />
+          <div className="h-4 w-72 bg-[var(--surface-elevated)] rounded" />
+        </div>
+        <div className="h-12 w-full bg-[var(--surface-elevated)] rounded-xl" />
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-28 bg-[var(--surface-elevated)] rounded-xl" />
+          ))}
+        </div>
+        <div className="h-24 w-full bg-[var(--surface-elevated)] rounded-xl" />
+        <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-6">
+            <div className="h-64 bg-[var(--surface-elevated)] rounded-xl" />
+            <div className="h-64 bg-[var(--surface-elevated)] rounded-xl" />
+          </div>
+          <div className="space-y-6">
+            <div className="h-44 bg-[var(--surface-elevated)] rounded-xl" />
+            <div className="h-48 bg-[var(--surface-elevated)] rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-8">
@@ -95,3 +116,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

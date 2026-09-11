@@ -135,6 +135,16 @@ export const metricCards: MetricCardData[] = [
 
 // ─── Active projects ──────────────────────────────────────────────────────────
 
+export interface ProjectActivity {
+  id: string;
+  timestamp: string;
+  author: string;
+  authorInitials: string;
+  action: string;
+  details?: string;
+  type: "status" | "comment" | "task" | "milestone";
+}
+
 export interface ActiveProject {
   id: string;
   name: string;
@@ -147,6 +157,7 @@ export interface ActiveProject {
   ownerName: string;
   /** Count of open tasks */
   openTasks: number;
+  activities?: ProjectActivity[];
 }
 
 export const activeProjects: ActiveProject[] = [
@@ -160,6 +171,11 @@ export const activeProjects: ActiveProject[] = [
     ownerInitials: "PS",
     ownerName:     "Priya Sharma",
     openTasks:     4,
+    activities: [
+      { id: "act_1", timestamp: "2026-09-11 09:30 AM", author: "Priya Sharma", authorInitials: "PS", action: "Updated progress to 72%", details: "Completed API integration milestone on schedule.", type: "status" },
+      { id: "act_2", timestamp: "2026-09-10 03:15 PM", author: "Jordan Ellis", authorInitials: "JE", action: "Added task: Finalize staging verification", type: "task" },
+      { id: "act_3", timestamp: "2026-09-09 11:00 AM", author: "Tom Kwan", authorInitials: "TK", action: "Milestone achieved: Security Audit passed", type: "milestone" },
+    ],
   },
   {
     id:            "proj_renewal_acme",
@@ -171,6 +187,11 @@ export const activeProjects: ActiveProject[] = [
     ownerInitials: "JE",
     ownerName:     "Jordan Ellis",
     openTasks:     9,
+    activities: [
+      { id: "act_4", timestamp: "2026-09-11 08:00 AM", author: "Jordan Ellis", authorInitials: "JE", action: "Flagged project as At Risk", details: "Executive sponsor turnover detected on customer side.", type: "status" },
+      { id: "act_5", timestamp: "2026-09-10 02:45 PM", author: "Priya Sharma", authorInitials: "PS", action: "Added comment", details: "Needs urgent alignment call with VP of Engineering.", type: "comment" },
+      { id: "act_6", timestamp: "2026-09-08 04:30 PM", author: "Ana Reyes", authorInitials: "AR", action: "Assigned 3 new prep tasks to Jordan", type: "task" },
+    ],
   },
   {
     id:            "proj_onboard_ns",
@@ -182,6 +203,10 @@ export const activeProjects: ActiveProject[] = [
     ownerInitials: "TK",
     ownerName:     "Tom Kwan",
     openTasks:     1,
+    activities: [
+      { id: "act_7", timestamp: "2026-09-11 08:15 AM", author: "Tom Kwan", authorInitials: "TK", action: "Uploaded onboarding sign-off checklist", type: "task" },
+      { id: "act_8", timestamp: "2026-09-09 01:20 PM", author: "Tom Kwan", authorInitials: "TK", action: "Completed user training session", details: "24 team members onboarded successfully.", type: "milestone" },
+    ],
   },
   {
     id:            "proj_qbr_globalfin",
@@ -193,6 +218,10 @@ export const activeProjects: ActiveProject[] = [
     ownerInitials: "AR",
     ownerName:     "Ana Reyes",
     openTasks:     6,
+    activities: [
+      { id: "act_9", timestamp: "2026-09-11 07:00 AM", author: "Ana Reyes", authorInitials: "AR", action: "Marked project as Blocked", details: "Awaiting Q2 metrics export from data engineering.", type: "status" },
+      { id: "act_10", timestamp: "2026-09-10 05:00 PM", author: "Marcus Lee", authorInitials: "ML", action: "Submitted draft presentation deck v1", type: "comment" },
+    ],
   },
   {
     id:            "proj_datasync_exp",
@@ -204,10 +233,30 @@ export const activeProjects: ActiveProject[] = [
     ownerInitials: "ML",
     ownerName:     "Marcus Lee",
     openTasks:     7,
+    activities: [
+      { id: "act_11", timestamp: "2026-09-10 04:30 PM", author: "Marcus Lee", authorInitials: "ML", action: "Added 3 expansion scope tasks", type: "task" },
+      { id: "act_12", timestamp: "2026-09-07 10:00 AM", author: "Jordan Ellis", authorInitials: "JE", action: "Kickoff call completed", type: "milestone" },
+    ],
   },
 ];
 
 // ─── AI Insights feed ─────────────────────────────────────────────────────────
+
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+  benchmark?: number;
+}
+
+export interface InsightDetail {
+  whatHappened: string;
+  whyDetected: string;
+  chartTitle: string;
+  chartData: ChartDataPoint[];
+  chartType: "bar" | "line" | "area";
+  businessImpact: string;
+  recommendedAction: string;
+}
 
 export interface InsightItem {
   id: string;
@@ -223,6 +272,8 @@ export interface InsightItem {
   ctaHref: string;
   ctaLabel: string;
   read: boolean;
+  status?: "active" | "accepted" | "dismissed" | "task_created";
+  detail: InsightDetail;
 }
 
 export const insights: InsightItem[] = [
@@ -238,6 +289,21 @@ export const insights: InsightItem[] = [
     ctaHref:      "/ai-insights",
     ctaLabel:     "View analysis",
     read:         false,
+    status:       "active",
+    detail: {
+      whatHappened: "Three major Enterprise accounts (Acme Corp, Meridian Health, and GlobalFin) comprise 61% ($2.4M) of total forecasted pipeline for Q4 2026.",
+      whyDetected: "RF Intelligence calculated a Herfindahl-Hirschman Index (HHI) concentration score of 0.38 across pipeline deals, exceeding the safe threshold (0.20).",
+      chartTitle: "Pipeline Share by Top Accounts vs Threshold (%)",
+      chartType: "bar",
+      chartData: [
+        { label: "Acme Corp", value: 26, benchmark: 10 },
+        { label: "Meridian", value: 20, benchmark: 10 },
+        { label: "GlobalFin", value: 15, benchmark: 10 },
+        { label: "Other 12 Accts", value: 39, benchmark: 70 },
+      ],
+      businessImpact: "If any single top-3 deal slips or churns, Q4 target attainment will drop below 75% baseline.",
+      recommendedAction: "Accelerate stage-2 opportunities in mid-market tier and require executive sponsor check-ins for the top 3 deals by Friday.",
+    },
   },
   {
     id:           "ins_renewal_vel",
@@ -251,6 +317,21 @@ export const insights: InsightItem[] = [
     ctaHref:      "/ai-insights",
     ctaLabel:     "See opportunities",
     read:         false,
+    status:       "active",
+    detail: {
+      whatHappened: "Q3 early renewals completed 14 days ahead of scheduled timeline. Meridian Health added +40 seats organically.",
+      whyDetected: "RF AI speech-to-text identified recurring high-intent keywords ('add seats', 'tier upgrade') across 4 consecutive QBR recordings.",
+      chartTitle: "Quarterly Renewal Rate Trend (%)",
+      chartType: "line",
+      chartData: [
+        { label: "Q4 '25", value: 87, benchmark: 85 },
+        { label: "Q1 '26", value: 89, benchmark: 85 },
+        { label: "Q2 '26", value: 91, benchmark: 85 },
+        { label: "Q3 '26", value: 94, benchmark: 85 },
+      ],
+      businessImpact: "Potential +$180k Net Retention Expansion available before contract renewal date.",
+      recommendedAction: "Send tailored enterprise tier upgrade proposal to Priya Sharma at Meridian Health.",
+    },
   },
   {
     id:           "ins_sentiment_drop",
@@ -264,6 +345,21 @@ export const insights: InsightItem[] = [
     ctaHref:      "/conversations",
     ctaLabel:     "Review calls",
     read:         true,
+    status:       "active",
+    detail: {
+      whatHappened: "Sentiment score plummeted from 0.82 to 0.41 across customer success touchpoints over 14 days following sponsor change.",
+      whyDetected: "NLP tone model detected increased objection phrasing ('delay', 'cost audit', 'alternative solutions') in recent transcripts.",
+      chartTitle: "14-Day Sentiment Trajectory (0 - 1.0)",
+      chartType: "area",
+      chartData: [
+        { label: "Aug 28", value: 82, benchmark: 70 },
+        { label: "Sep 01", value: 78, benchmark: 70 },
+        { label: "Sep 05", value: 55, benchmark: 70 },
+        { label: "Sep 09", value: 41, benchmark: 70 },
+      ],
+      businessImpact: "$480K ARR contract renewal in 9 days is at severe risk of churn or downsell.",
+      recommendedAction: "Schedule urgent executive alignment call with new VP sponsor and offer complimentary integration consultation.",
+    },
   },
   {
     id:           "ins_qbr_summary",
@@ -277,6 +373,20 @@ export const insights: InsightItem[] = [
     ctaHref:      "/reports",
     ctaLabel:     "Open deck",
     read:         true,
+    status:       "active",
+    detail: {
+      whatHappened: "RF Automated Agent compiled product usage analytics, ROI metrics, and upcoming roadmap items into a QBR deck draft.",
+      whyDetected: "Scheduled automated workflow triggered 10 days prior to GlobalFin's end-of-quarter review date.",
+      chartTitle: "GlobalFin Product Usage Growth (MAU)",
+      chartType: "bar",
+      chartData: [
+        { label: "Month 1", value: 120, benchmark: 100 },
+        { label: "Month 2", value: 240, benchmark: 150 },
+        { label: "Month 3", value: 410, benchmark: 200 },
+      ],
+      businessImpact: "Saves ~6 hours of manual deck preparation for AE Ana Reyes prior to the client presentation.",
+      recommendedAction: "Review generated slides, attach Q2 usage appendix, and send invite to client stakeholders.",
+    },
   },
 ];
 
@@ -483,3 +593,4 @@ export const notifications: NotificationItem[] = [
 export const MOCK_USER         = currentUser;
 export const MOCK_ORGS         = orgs;
 export const MOCK_NOTIFICATIONS = notifications;
+
