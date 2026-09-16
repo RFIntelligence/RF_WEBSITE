@@ -1,0 +1,284 @@
+/*
+ * RF Intelligence — Brand CSS Custom Properties
+ * ─────────────────────────────────────────────────────────────────────────────
+ * SINGLE SOURCE OF TRUTH for the monorepo's design token layer.
+ *
+ * Usage in any app's globals.css:
+ *   @import "@rf-intelligence/ui/brand.css";
+ *
+ * All component styling must reference these vars — never hardcode hex/px.
+ * The Tailwind @theme inline block in each app maps these into utility classes.
+ *
+ * Sections
+ *   1. Red brand scale
+ *   2. Dark theme (default — :root + [data-theme="dark"])
+ *   3. Light theme ([data-theme="light"])
+ *   4. Base / resets
+ *   5. shadcn/ui OKLCH semantic tokens
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ── 1. Red brand scale ───────────────────────────────────────────────────── */
+/* Derived from the logo mark. Never alias these to shadcn --accent.           */
+:root {
+  --red-50:  #FA504D;   /* accentHover, SweepButton sweep, nav active          */
+  --red-100: #F24E4B;   /* PRIMARY ACCENT — CTA buttons, focus ring, eyebrows  */
+  --red-200: #CF4240;   /* gradient midpoint, NavbarButton hover bg            */
+  --red-300: #AD3836;   /* gradient midpoint                                   */
+  --red-400: #8C2D2B;   /* particle palette entry                              */
+  --red-500: #692220;   /* accentDeep — WhyRF/Benefits section backgrounds     */
+}
+
+/* ── 2. Dark theme (default) ─────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Surfaces */
+  --background:       #05060A;
+  --surface:          #0D0E12;
+  --surface-elevated: #15161C;
+
+  /* Typography */
+  --text-primary:   #F5F5F0;
+  --text-secondary: rgba(245, 245, 240, 0.7);
+  --text-muted:     rgba(245, 245, 240, 0.45);
+
+  /* Brand accent — maps to the red scale */
+  --accent:            var(--red-100);   /* #F24E4B */
+  --accent-hover:      var(--red-50);    /* #FA504D */
+  --accent-deep:       var(--red-500);   /* #692220 */
+  --accent-foreground: #0D0E12;          /* near-black on red buttons */
+
+  /* Borders */
+  --border:        rgba(245, 245, 240, 0.08);
+  --border-strong: rgba(245, 245, 240, 0.16);
+
+  /* Focus */
+  --focus-ring: var(--red-100);
+
+  /* Glass surfaces (scrolled navbar, modals) */
+  --glass-bg:   rgba(13, 14, 18, 0.72);
+  --glass-blur: 12px;
+
+  /* ── Component-specific surface constants ──────────────────────────────── */
+  /* These are used via style={} props in canvas/animation-heavy components   */
+  /* where Tailwind classes aren't practical. Reference in JS via tokens.ts.  */
+  --black-mid:       #0A0A0A;   /* card/section bg inside dark surfaces       */
+  --red-tint-card:   #1A1414;   /* red-tinted dark card bg (AboutBento)       */
+  --sweep-btn-bg:    #212121;   /* SweepButton resting background             */
+  --ink-warm:        #F5F1EC;   /* warm off-white for body copy on red panels */
+  --ink-soft:        rgba(245, 241, 236, 0.72); /* subtext on red sections    */
+  --ink-faint:       rgba(245, 241, 236, 0.50); /* muted text on red sections */
+  --salmon:          #FF9B8A;   /* eyebrow/highlight text on red backgrounds  */
+}
+
+/* ── 3. Light theme ──────────────────────────────────────────────────────── */
+/*   Defined; not yet active (ThemeProvider locked to dark — Phase 1 item).   */
+/*   --accent deepened to #D63E3B for WCAG AA on white backgrounds.           */
+[data-theme="light"] {
+  --background:       #F8F8F6;
+  --surface:          #FFFFFF;
+  --surface-elevated: #FFFFFF;
+
+  --text-primary:   #0F0F0E;
+  --text-secondary: rgba(15, 15, 14, 0.65);
+  --text-muted:     rgba(15, 15, 14, 0.40);
+
+  /* NOTE: red-100 (#F24E4B) fails AA on white — use #D63E3B here only */
+  --accent:            #D63E3B;
+  --accent-hover:      var(--red-100);
+  --accent-deep:       var(--red-500);
+  --accent-foreground: #FFFFFF;
+
+  --border:        rgba(15, 15, 14, 0.12);
+  --border-strong: rgba(15, 15, 14, 0.22);
+
+  --focus-ring: #D63E3B;
+
+  --glass-bg:   rgba(255, 255, 255, 0.80);
+  --glass-blur: 12px;
+}
+
+/* ── 4. Spacing, radius, motion ──────────────────────────────────────────── */
+:root {
+  /* Spacing (4px base grid) */
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.25rem;   /* 20px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-8:  2rem;      /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+  --space-20: 5rem;      /* 80px */
+  --space-24: 6rem;      /* 96px */
+
+  /* Typography scale */
+  --font-size-xs:   0.75rem;   /* 12px */
+  --font-size-sm:   0.875rem;  /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg:   1.125rem;  /* 18px */
+  --font-size-xl:   1.25rem;   /* 20px */
+  --font-size-2xl:  1.5rem;    /* 24px */
+  --font-size-3xl:  1.875rem;  /* 30px */
+  --font-size-4xl:  2.25rem;   /* 36px */
+  --font-size-5xl:  3rem;      /* 48px */
+  --font-size-6xl:  3.75rem;   /* 60px */
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Motion */
+  --duration-fast:   150ms;
+  --duration-normal: 250ms;
+  --duration-slow:   400ms;
+  --duration-xslow:  600ms;
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* ── 5. shadcn/ui OKLCH semantic tokens ──────────────────────────────────── */
+/*                                                                             */
+/*   ⚠ CLASH NOTICE — read before using:                                      */
+/*                                                                             */
+/*   shadcn defines --accent as oklch(0.7 0.18 145) — a mid-teal/green used   */
+/*   by its own components (Combobox, Badge, etc.).                            */
+/*                                                                             */
+/*   The RF brand overrides --accent to var(--red-100) = #F24E4B in the       */
+/*   [data-theme="dark"] block above, which takes precedence at runtime        */
+/*   because that block is applied to :root. This means shadcn components     */
+/*   that rely on their own --accent will render in brand red, not green.      */
+/*                                                                             */
+/*   Resolution applied here:                                                  */
+/*     • --accent    → brand red (RF wins — intentional)                      */
+/*     • --ring      → brand red (replaced oklch green below)                 */
+/*     • --sidebar-primary, --sidebar-ring → brand red (dashboard sidebar)    */
+/*     • shadcn green is preserved only in --chart-2 for data visualisations  */
+/*                                                                             */
+/*   See BRAND.md §Clash Report for the full decision log.                    */
+:root {
+  --background:             oklch(0.09 0.005 260);
+  --foreground:             oklch(0.95 0 0);
+  --card:                   oklch(0.12 0.005 260);
+  --card-foreground:        oklch(0.95 0 0);
+  --popover:                oklch(0.12 0.005 260);
+  --popover-foreground:     oklch(0.95 0 0);
+  --primary:                oklch(0.95 0 0);
+  --primary-foreground:     oklch(0.09 0.005 260);
+  --secondary:              oklch(0.18 0.005 260);
+  --secondary-foreground:   oklch(0.95 0 0);
+  --muted:                  oklch(0.18 0.005 260);
+  --muted-foreground:       oklch(0.65 0 0);
+  /* shadcn --accent overridden by [data-theme="dark"] block to brand red */
+  --accent:                 oklch(0.7 0.18 145);    /* shadcn fallback (green)  */
+  --accent-foreground:      oklch(0.09 0.005 260);
+  --destructive:            oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border:                 oklch(0.22 0.005 260);
+  --input:                  oklch(0.18 0.005 260);
+  /* Ring — replaced with brand red (#F24E4B ≈ oklch(0.62 0.2 25)) */
+  --ring:                   oklch(0.62 0.2 25);
+  --radius:                 0.5rem;
+  /* Chart palette — green preserved for data visualisation only */
+  --chart-1:  oklch(0.7 0.18 220);
+  --chart-2:  oklch(0.7 0.18 145);  /* shadcn green — data only, not UI */
+  --chart-3:  oklch(0.75 0.18 55);
+  --chart-4:  oklch(0.65 0.2 25);
+  --chart-5:  oklch(0.7 0.15 300);
+  --success:  oklch(0.7 0.18 145);
+  --warning:  oklch(0.75 0.18 55);
+  /* Sidebar — brand red as primary/ring so sidebar nav active states use
+     RF red, not the shadcn green */
+  --sidebar:                        oklch(0.11 0.005 260);
+  --sidebar-foreground:             oklch(0.95 0 0);
+  --sidebar-primary:                oklch(0.62 0.2 25);  /* brand red */
+  --sidebar-primary-foreground:     oklch(0.09 0.005 260);
+  --sidebar-accent:                 oklch(0.18 0.005 260);
+  --sidebar-accent-foreground:      oklch(0.95 0 0);
+  --sidebar-border:                 oklch(0.22 0.005 260);
+  --sidebar-ring:                   oklch(0.62 0.2 25);  /* brand red */
+}
+
+/* .dark mirrors :root — app is dark-first */
+.dark {
+  --background:             oklch(0.09 0.005 260);
+  --foreground:             oklch(0.95 0 0);
+  --card:                   oklch(0.12 0.005 260);
+  --card-foreground:        oklch(0.95 0 0);
+  --popover:                oklch(0.12 0.005 260);
+  --popover-foreground:     oklch(0.95 0 0);
+  --primary:                oklch(0.95 0 0);
+  --primary-foreground:     oklch(0.09 0.005 260);
+  --secondary:              oklch(0.18 0.005 260);
+  --secondary-foreground:   oklch(0.95 0 0);
+  --muted:                  oklch(0.18 0.005 260);
+  --muted-foreground:       oklch(0.65 0 0);
+  --accent:                 oklch(0.7 0.18 145);
+  --accent-foreground:      oklch(0.09 0.005 260);
+  --destructive:            oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border:                 oklch(0.22 0.005 260);
+  --input:                  oklch(0.18 0.005 260);
+  --ring:                   oklch(0.62 0.2 25);
+  --chart-1:  oklch(0.7 0.18 220);
+  --chart-2:  oklch(0.7 0.18 145);
+  --chart-3:  oklch(0.75 0.18 55);
+  --chart-4:  oklch(0.65 0.2 25);
+  --chart-5:  oklch(0.7 0.15 300);
+  --success:  oklch(0.7 0.18 145);
+  --warning:  oklch(0.75 0.18 55);
+  --sidebar:                        oklch(0.11 0.005 260);
+  --sidebar-foreground:             oklch(0.95 0 0);
+  --sidebar-primary:                oklch(0.62 0.2 25);
+  --sidebar-primary-foreground:     oklch(0.09 0.005 260);
+  --sidebar-accent:                 oklch(0.18 0.005 260);
+  --sidebar-accent-foreground:      oklch(0.95 0 0);
+  --sidebar-border:                 oklch(0.22 0.005 260);
+  --sidebar-ring:                   oklch(0.62 0.2 25);
+}
+
+/* ── 6. Base / resets ────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Visible focus ring — all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Scrollbar */
+:root,
+[data-theme="dark"] {
+  scrollbar-color: var(--surface-elevated) var(--background);
+  scrollbar-width: thin;
+}
+
+[data-theme="light"] {
+  scrollbar-color: #D0D0CE var(--background);
+  scrollbar-width: thin;
+}

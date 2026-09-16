@@ -1,0 +1,333 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum ProjectStatus {
+  ON_TRACK
+  AT_RISK
+  BLOCKED
+  COMPLETED
+}
+
+enum InsightSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+enum InsightType {
+  RISK
+  OPPORTUNITY
+  ANOMALY
+  SUMMARY
+}
+
+enum InsightActionStatus {
+  ACCEPTED
+  DISMISSED
+  TASK_CREATED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum DocumentProcessingStatus {
+  INDEXED
+  PROCESSING
+  FAILED
+}
+
+enum ReportStatus {
+  READY
+  PROCESSING
+  FAILED
+}
+
+// ─── 1. Organization (Tenant) ──────────────────────────────────────────────────
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  plan      String   @default("Enterprise")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  projects          Project[]
+  projectActivities ProjectActivity[]
+  insights          Insight[]
+  insightActions    InsightAction[]
+  tasks             Task[]
+  documents         Document[]
+  reports           Report[]
+  conversations     Conversation[]
+  messages          Message[]
+  notifications     Notification[]
+  askRfQueries      AskRfQuery[]
+  auditLogs         AuditLog[]
+
+  @@map("organizations")
+}
+
+// ─── 2. User ───────────────────────────────────────────────────────────────────
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  email          String   @unique
+  role           Role     @default(MEMBER)
+  avatarInitials String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownedProjects     Project[]         @relation("ProjectOwner")
+  projectActivities ProjectActivity[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  uploadedDocuments Document[]
+  createdReports    Report[]
+  sentMessages      Message[]
+  notifications     Notification[]
+  askRfQueries      AskRfQuery[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+// ─── 3. Project ────────────────────────────────────────────────────────────────
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  ownerId        String
+  name           String
+  accountName    String
+  status         ProjectStatus @default(ON_TRACK)
+  progress       Int           @default(0) // 0 - 100
+  dueDate        DateTime
+  openTasksCount Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User              @relation("ProjectOwner", fields: [ownerId], references: [id])
+  activities   ProjectActivity[]
+  tasks        Task[]
+
+  @@map("projects")
+}
+
+// ─── 4. ProjectActivity ────────────────────────────────────────────────────────
+model ProjectActivity {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  authorId       String
+  action         String
+  details        String?
+  type           String // "status" | "comment" | "task" | "milestone"
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id])
+
+  @@map("project_activities")
+}
+
+// ─── 5. Insight ────────────────────────────────────────────────────────────────
+model Insight {
+  id             String          @id @default(cuid())
+  organizationId String
+  type           InsightType
+  severity       InsightSeverity
+  title          String
+  body           String
+  accountName    String?
+  ctaHref        String
+  ctaLabel       String
+  read           Boolean         @default(false)
+  
+  // Detailed AI payload (JSON string or structured fields)
+  whatHappened      String
+  whyDetected       String
+  chartTitle        String
+  chartType         String      // "bar" | "line" | "area"
+  chartDataJson     String      // JSON array of data points
+  businessImpact    String
+  recommendedAction String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actions      InsightAction[]
+
+  @@map("insights")
+}
+
+// ─── 6. InsightAction ──────────────────────────────────────────────────────────
+model InsightAction {
+  id             String              @id @default(cuid())
+  organizationId String
+  insightId      String
+  actionStatus   InsightActionStatus
+  performedAt    DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  insight      Insight      @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@map("insight_actions")
+}
+
+// ─── 7. Task ───────────────────────────────────────────────────────────────────
+model Task {
+  id             String     @id @default(cuid())
+  organizationId String
+  projectId      String?
+  assigneeId     String?
+  title          String
+  description    String?
+  status         TaskStatus @default(TODO)
+  dueDate        DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  @@map("tasks")
+}
+
+// ─── 8. Document ───────────────────────────────────────────────────────────────
+model Document {
+  id                     String                   @id @default(cuid())
+  organizationId         String
+  uploadedById           String
+  fileName               String
+  fileSize               String
+  fileUrl                String
+  processingStatus       DocumentProcessingStatus @default(PROCESSING)
+  linkedAccount          String?
+  extractedEntitiesCount Int                      @default(0)
+  createdAt              DateTime                 @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+
+  @@map("documents")
+}
+
+// ─── 9. Report ─────────────────────────────────────────────────────────────────
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  createdById    String
+  title          String
+  type           String       // "QBR Deck" | "Executive Summary" | "Health Scorecard" | "Pipeline Risk"
+  accountName    String
+  size           String
+  status         ReportStatus @default(READY)
+  fileUrl        String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  @@map("reports")
+}
+
+// ─── 10. Conversation (Internal Client ↔ RF Team) ──────────────────────────────
+model Conversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  topic          String
+  contextLabel   String
+  rfLead         String
+  unread         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+// ─── 11. Message ───────────────────────────────────────────────────────────────
+model Message {
+  id             String   @id @default(cuid())
+  organizationId String
+  conversationId String
+  senderId       String
+  isRFTeam       Boolean  @default(false)
+  content        String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+// ─── 12. Notification ──────────────────────────────────────────────────────────
+model Notification {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String
+  body           String
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ─── 13. AskRfQuery (Audit Log of AI Answers) ──────────────────────────────────
+model AskRfQuery {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  queryText      String
+  answerText     String
+  sourcesJson    String   // JSON string array of citations
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("ask_rf_queries")
+}
+
+// ─── 14. AuditLog ──────────────────────────────────────────────────────────────
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  metadataJson   String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
