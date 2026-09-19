@@ -4,7 +4,13 @@ const nextConfig: NextConfig = {
   compiler: {
     styledComponents: true,
   },
-  transpilePackages: ["@rf-intelligence/ui"],
+  transpilePackages: ["@rf-intelligence/ui", "@rf-intelligence/db"],
+  serverExternalPackages: [
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "ably",
+    "inngest",
+  ],
 };
 
 export default nextConfig;

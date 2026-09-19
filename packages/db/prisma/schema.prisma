@@ -45,8 +45,8 @@ enum TaskStatus {
 }
 
 enum DocumentProcessingStatus {
-  INDEXED
-  PROCESSING
+  PENDING
+  PROCESSED
   FAILED
 }
 
@@ -64,19 +64,21 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users             User[]
-  projects          Project[]
-  projectActivities ProjectActivity[]
-  insights          Insight[]
-  insightActions    InsightAction[]
-  tasks             Task[]
-  documents         Document[]
-  reports           Report[]
-  conversations     Conversation[]
-  messages          Message[]
-  notifications     Notification[]
-  askRfQueries      AskRfQuery[]
-  auditLogs         AuditLog[]
+  users                   User[]
+  projects                Project[]
+  projectActivities       ProjectActivity[]
+  insights                Insight[]
+  insightActions          InsightAction[]
+  tasks                   Task[]
+  documents               Document[]
+  reports                 Report[]
+  conversations           Conversation[]
+  messages                Message[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  askRfQueries            AskRfQuery[]
+  auditLogs               AuditLog[]
+  invitations             Invitation[]
 
   @@map("organizations")
 }
@@ -87,21 +89,25 @@ model User {
   organizationId String
   name           String
   email          String   @unique
+  passwordHash   String?  // null for demo/seed users; set when an invited user accepts
   role           Role     @default(MEMBER)
   avatarInitials String
+  isRFTeam       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  ownedProjects     Project[]         @relation("ProjectOwner")
-  projectActivities ProjectActivity[]
-  assignedTasks     Task[]            @relation("TaskAssignee")
-  uploadedDocuments Document[]
-  createdReports    Report[]
-  sentMessages      Message[]
-  notifications     Notification[]
-  askRfQueries      AskRfQuery[]
-  auditLogs         AuditLog[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownedProjects          Project[]               @relation("ProjectOwner")
+  projectActivities      ProjectActivity[]
+  assignedTasks          Task[]                  @relation("TaskAssignee")
+  uploadedDocuments      Document[]
+  createdReports         Report[]
+  sentMessages           Message[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  askRfQueries           AskRfQuery[]
+  auditLogs              AuditLog[]
+  sentInvitations        Invitation[]
 
   @@map("users")
 }
@@ -124,6 +130,8 @@ model Project {
   owner        User              @relation("ProjectOwner", fields: [ownerId], references: [id])
   activities   ProjectActivity[]
   tasks        Task[]
+  documents    Document[]
+  reports      Report[]
 
   @@map("projects")
 }
@@ -158,13 +166,13 @@ model Insight {
   ctaHref        String
   ctaLabel       String
   read           Boolean         @default(false)
-  
+
   // Detailed AI payload (JSON string or structured fields)
   whatHappened      String
   whyDetected       String
   chartTitle        String
-  chartType         String      // "bar" | "line" | "area"
-  chartDataJson     String      // JSON array of data points
+  chartType         String // "bar" | "line" | "area"
+  chartDataJson     String // JSON array of data points
   businessImpact    String
   recommendedAction String
 
@@ -216,17 +224,27 @@ model Document {
   id                     String                   @id @default(cuid())
   organizationId         String
   uploadedById           String
+  projectId              String?
   fileName               String
   fileSize               String
   fileUrl                String
-  processingStatus       DocumentProcessingStatus @default(PROCESSING)
+  storageKey             String?
+  mimeType               String?
+  processingStatus       DocumentProcessingStatus @default(PENDING)
   linkedAccount          String?
   extractedEntitiesCount Int                      @default(0)
+  metadataJson           String?
+  failureReason          String?
   createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  reports      Report[]
 
+  @@index([organizationId, createdAt])
+  @@index([projectId])
   @@map("documents")
 }
 
@@ -235,8 +253,10 @@ model Report {
   id             String       @id @default(cuid())
   organizationId String
   createdById    String
+  projectId      String?
+  documentId     String?      @unique
   title          String
-  type           String       // "QBR Deck" | "Executive Summary" | "Health Scorecard" | "Pipeline Risk"
+  type           String // "QBR Deck" | "Executive Summary" | "Health Scorecard" | "Pipeline Risk"
   accountName    String
   size           String
   status         ReportStatus @default(READY)
@@ -245,7 +265,11 @@ model Report {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User         @relation(fields: [createdById], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  document     Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
 
+  @@index([organizationId, createdAt])
+  @@index([projectId])
   @@map("reports")
 }
 
@@ -299,6 +323,26 @@ model Notification {
   @@map("notifications")
 }
 
+// ─── 12b. NotificationPreference (Per-user delivery preferences) ───────────────
+model NotificationPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  organizationId   String
+  emailEnabled     Boolean  @default(true)
+  inAppEnabled     Boolean  @default(true)
+  emailAlerts      Boolean  @default(true)
+  riskSignals      Boolean  @default(true)
+  weeklyDigest     Boolean  @default(true)
+  slackIntegration Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
 // ─── 13. AskRfQuery (Audit Log of AI Answers) ──────────────────────────────────
 model AskRfQuery {
   id             String   @id @default(cuid())
@@ -306,7 +350,7 @@ model AskRfQuery {
   userId         String
   queryText      String
   answerText     String
-  sourcesJson    String   // JSON string array of citations
+  sourcesJson    String // JSON string array of citations
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -330,4 +374,33 @@ model AuditLog {
   user         User?        @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+
+// ─── 15. Invitation ────────────────────────────────────────────────────────────
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  invitedById    String
+  email          String
+  role           Role             @default(MEMBER)
+  token          String           @unique // HMAC-signed token sent in the invite link
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation(fields: [invitedById], references: [id])
+
+  @@index([organizationId, status])
+  @@index([token])
+  @@map("invitations")
 }

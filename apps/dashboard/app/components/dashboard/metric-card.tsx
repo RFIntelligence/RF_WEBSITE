@@ -8,22 +8,21 @@ import {
   Minus,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
-import type { MetricCardData } from "@/app/lib/mock-data";
+import type { MetricCard as MetricCardData, ChipColor, MetricIconKey } from "@/app/types/dashboard";
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
-const ICON_MAP = {
-  "folder-kanban":  FolderKanban,
+const ICON_MAP: Record<MetricIconKey, React.ElementType> = {
+  "folder-kanban":   FolderKanban,
   "messages-square": MessagesSquare,
-  "sparkles":       Sparkles,
-  "users":          Users,
-  "trending-up":    TrendingUp,
-} as const;
+  "sparkles":        Sparkles,
+  "users":           Users,
+  "trending-up":     TrendingUp,
+};
 
 // ─── Chip colour map → CSS var tokens ────────────────────────────────────────
-// Each entry: [chip bg, icon colour]
 
-const CHIP_COLORS: Record<MetricCardData["chipColor"], [string, string]> = {
+const CHIP_COLORS: Record<ChipColor, [string, string]> = {
   red:    ["rgba(242,78,75,0.12)",   "var(--accent)"],
   blue:   ["rgba(96,165,250,0.12)",  "var(--dash-chart-secondary)"],
   green:  ["rgba(74,222,128,0.12)",  "var(--dash-status-running)"],
@@ -47,8 +46,8 @@ export function MetricCard({ card }: MetricCardProps) {
     Minus;
 
   const trendColor =
-    card.trend === "up"   ? "var(--dash-status-running)"  :
-    card.trend === "down" ? "var(--dash-status-error)"    :
+    card.trend === "up"   ? "var(--dash-status-running)" :
+    card.trend === "down" ? "var(--dash-status-error)"   :
     "var(--text-muted)";
 
   return (

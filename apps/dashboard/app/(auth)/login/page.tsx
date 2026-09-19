@@ -1,17 +1,46 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 
+const DEMO_EMAIL = "jordan.ellis@acmecorp.com";
+const DEMO_PASSWORD = "password";
+
 export default function LoginPage() {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function handleSignIn(e: React.FormEvent) {
+  async function signIn(email: string, password: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error || "Sign in failed. Please try again.");
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // No auth logic — clicking Sign in navigates straight to dashboard
-    router.push("/dashboard");
+    const form = new FormData(e.currentTarget);
+    void signIn(String(form.get("email") ?? ""), String(form.get("password") ?? ""));
   }
 
   return (
@@ -75,10 +104,12 @@ export default function LoginPage() {
               </label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="you@company.com"
-                defaultValue="jordan.ellis@acmecorp.com"
+                defaultValue={DEMO_EMAIL}
                 autoComplete="email"
+                required
               />
             </div>
 
@@ -91,10 +122,12 @@ export default function LoginPage() {
               </label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 placeholder="••••••••"
-                defaultValue="password"
+                defaultValue={DEMO_PASSWORD}
                 autoComplete="current-password"
+                required
               />
             </div>
 
@@ -107,8 +140,18 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <Button type="submit" className="mt-2 w-full h-10 text-sm font-semibold">
-              Sign in
+            {error && (
+              <p role="alert" className="text-xs text-red-400">
+                {error}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="mt-2 w-full h-10 text-sm font-semibold"
+            >
+              {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
 
@@ -127,8 +170,9 @@ export default function LoginPage() {
           <Button
             type="button"
             variant="outline"
+            disabled={loading}
             className="w-full h-10 text-sm"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => void signIn(DEMO_EMAIL, DEMO_PASSWORD)}
           >
             <svg
               aria-hidden="true"
@@ -150,7 +194,7 @@ export default function LoginPage() {
           <button
             type="button"
             className="text-[var(--accent)] hover:underline"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => setError("Account requests are handled by your RF workspace admin.")}
           >
             Request access
           </button>
