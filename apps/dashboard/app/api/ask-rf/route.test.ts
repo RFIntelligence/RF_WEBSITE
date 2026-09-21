@@ -253,9 +253,12 @@ function makeRequest(body: unknown): Request {
   });
 }
 
+import { clearAskRfCache } from "@/lib/ask-rf/cache";
+
 beforeEach(() => {
   vi.clearAllMocks();
   resetRateLimit();
+  clearAskRfCache();
   h.askRfQueries.length = 0;
   // Echo the context back so the answer reflects exactly what DeepSeek received.
   h.askDeepSeek.mockImplementation(

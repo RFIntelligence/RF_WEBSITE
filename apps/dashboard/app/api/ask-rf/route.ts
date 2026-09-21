@@ -27,11 +27,13 @@ import {
   type ToolContext,
 } from "@/lib/ask-rf/tools";
 
+import { askDeepSeek, DeepSeekConfigError } from "@/app/lib/deepseek";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_QUESTION_LENGTH = 4000;
-const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function sanitizeInput(text: string): string {
@@ -57,20 +59,16 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // Fetch full user record to verify role and name
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, name: true, role: true, organization: { select: { id: true, name: true } } },
-  });
-
-  if (!user || !user.organization) {
-    return json({ error: "User or organization not found" }, 401);
-  }
+  // Identity is strictly anchored to session
+  const orgId = session.organizationId;
+  const userId = session.userId;
+  const userName = session.name || "User";
+  const userRole = session.role || "MEMBER";
 
   const toolCtx: ToolContext = {
-    organizationId: user.organization.id,
-    userId: user.id,
-    userRole: user.role,
+    organizationId: orgId,
+    userId,
+    userRole,
   };
 
   // 2. Parse & Validate Payload
@@ -102,9 +100,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // 3. Per-user Rate Limiting (20 req / min)
+  // 3. Per-user Rate Limiting (10 req / min)
   const limit = rateLimit(
-    `ask-rf:${user.id}`,
+    `ask-rf:${userId}`,
     RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW_MS,
   );
@@ -115,20 +113,20 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const modelId = process.env.DEEPSEEK_MODEL || "deepseek-chat";
-  const orgDataVersion = getOrgDataVersion(user.organization.id);
+  const orgDataVersion = getOrgDataVersion(orgId);
 
   // 4. Cache Lookup (Phase 6)
   const cacheKey = computeCacheKey({
     prompt: question,
-    organizationId: user.organization.id,
-    userId: user.id,
-    userRole: user.role,
+    organizationId: orgId,
+    userId,
+    userRole,
     modelId,
     history,
   });
 
   if (!isRegenerate) {
-    const cachedEntry = getFromCache(cacheKey, user.organization.id);
+    const cachedEntry = getFromCache(cacheKey, orgId);
     if (cachedEntry) {
       return json(
         {
@@ -173,115 +171,69 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const systemPrompt = buildSystemPrompt({
-    orgName: user.organization.name,
-    userName: user.name,
-    userRole: user.role,
-    currentDate: new Date().toISOString().slice(0, 10),
-  });
+  // 7. Workspace Sources Retrieval
+  const rawSources = await retrieveContext(orgId, question);
+  const finalSources = rawSources.map((source, index) => ({
+    id: source.id,
+    type: source.type,
+    title: source.title,
+    label: `S${index + 1}`,
+  }));
 
-  let answer = "";
-  let finalSources: Array<{ id: string; type: string; title: string; label: string }> = [];
-  let tier: string = category;
-  let cacheTtlMs = 10 * 60 * 1000; // default 10m
-
-  // 7. Category A: WORKSPACE_DATA with deterministic tools / retrieval
-  if (category === "WORKSPACE_DATA") {
-    const qLower = question.toLowerCase();
-    let toolResultContext = "";
-
-    if (qLower.includes("team") || qLower.includes("member") || qLower.includes("who is on")) {
-      const teamData = await executeGetTeamMembers(toolCtx);
-      toolResultContext = `TEAM MEMBERS TABLE (Total: ${teamData.total})\n` +
-        `| Name | Role | Email | Status | Joined |\n` +
-        `| --- | --- | --- | --- | --- |\n` +
-        teamData.members.map((m) => `| ${m.name} | ${m.role} | ${m.email} | ${m.status} | ${m.joined} |`).join("\n") +
-        `\nTotal: ${teamData.total} members`;
-    } else if (qLower.includes("project") || qLower.includes("task")) {
-      const projData = await executeGetProjects(toolCtx, {});
-      toolResultContext = `PROJECTS (Total: ${projData.total})\n` +
-        projData.projects.map((p) => `- ${p.name} (${p.accountName}): ${p.status}, ${p.progressPercent}% complete, due ${p.dueDate}, ${p.openTasks} open tasks`).join("\n");
-    } else if (qLower.includes("insight") || qLower.includes("risk") || qLower.includes("opportunity")) {
-      const insightData = await executeGetInsights(toolCtx, {});
-      toolResultContext = `INSIGHTS (Total: ${insightData.total})\n` +
-        insightData.insights.map((i) => `- [${i.severity}] ${i.title}: ${i.impact}. Recommendation: ${i.recommendation}`).join("\n");
-    } else if (qLower.includes("account") || qLower.includes("plan") || qLower.includes("organization")) {
-      const accData = await executeGetAccountInfo(toolCtx);
-      toolResultContext = `ACCOUNT INFO:\nOrganization: ${accData.organizationName}, Plan: ${accData.plan}, Member Since: ${accData.memberSince}`;
+  let answer: string;
+  try {
+    answer = await askDeepSeek(question, rawSources);
+  } catch (error) {
+    if (error instanceof DeepSeekConfigError) {
+      return json({ error: "Ask RF is not configured." }, 503);
     }
-
-    // Also pull relevant workspace sources
-    const sources = await retrieveContext(user.organization.id, question);
-    finalSources = sources.map((s, idx) => ({
-      id: s.id,
-      type: s.type,
-      title: s.title,
-      label: `S${idx + 1}`,
-    }));
-
-    const fullContext = [
-      toolResultContext ? `TOOL RESULTS:\n${toolResultContext}` : "",
-      sources.length > 0
-        ? `WORKSPACE CONTEXT:\n` + sources.map((s, idx) => `[S${idx + 1}] (${s.type}) ${s.title}: ${s.summary}`).join("\n\n")
-        : "",
-    ].filter(Boolean).join("\n\n");
-
-    answer = await callDeepSeekWithPrompt(systemPrompt, question, fullContext);
-  } else if (category === "PRODUCT_HELP") {
-    // 8. Category B: PRODUCT_HELP
-    answer = await callDeepSeekWithPrompt(systemPrompt, question, `PRODUCT KNOWLEDGE:\n${PRODUCT_KNOWLEDGE}`);
-    cacheTtlMs = 6 * 3600 * 1000;
-  } else {
-    // 9. Category C: DOMAIN_TOPIC (Search documents first)
-    const sources = await retrieveContext(user.organization.id, question);
-    if (sources.length > 0) {
-      finalSources = sources.map((s, idx) => ({
-        id: s.id,
-        type: s.type,
-        title: s.title,
-        label: `S${idx + 1}`,
-      }));
-      const contextStr = sources.map((s, idx) => `[S${idx + 1}] (${s.type}) ${s.title}: ${s.summary}`).join("\n\n");
-      answer = await callDeepSeekWithPrompt(systemPrompt, question, `WORKSPACE DOCUMENTS:\n${contextStr}`);
-    } else {
-      // General domain answer with opening disclosure
-      const domainAnswer = await callDeepSeekWithPrompt(
-        systemPrompt,
-        question,
-        "No matching internal workspace documents were found. Answer from general knowledge within RF's domain and begin with: 'This is not from your workspace documents.'"
-      );
-      answer = domainAnswer.startsWith("This is not from your workspace documents")
-        ? domainAnswer
-        : `This is not from your workspace documents. ${domainAnswer}`;
-      cacheTtlMs = 6 * 3600 * 1000;
-    }
+    console.error("Ask RF: DeepSeek request failed", error);
+    return json(
+      { error: "Ask RF is temporarily unavailable. Please try again." },
+      502,
+    );
   }
 
-  // 10. Cache Answer
+  // 8. Audit trail persistence to prisma.askRfQuery
+  try {
+    await prisma.askRfQuery.create({
+      data: {
+        organizationId: orgId,
+        userId: userId,
+        queryText: question,
+        answerText: answer,
+        sourcesJson: JSON.stringify(rawSources.map((source) => source.id)),
+      },
+    });
+  } catch (error) {
+    console.error("Ask RF: failed to persist query log", error);
+  }
+
+  // 9. Cache Answer
   saveToCache(cacheKey, {
     answer,
     sources: finalSources,
-    tier,
+    tier: category,
     dataVersion: orgDataVersion,
-    ttlMs: cacheTtlMs,
+    ttlMs: 10 * 60 * 1000,
   });
 
   // Observability logging
   const totalDuration = Date.now() - startTime;
   console.log(JSON.stringify({
     event: "ask_rf_query",
-    tier,
+    tier: category,
     cached: false,
     durationMs: totalDuration,
-    orgId: user.organization.id,
-    userId: user.id,
+    orgId,
+    userId,
   }));
 
   return json(
     {
       answer,
       sources: finalSources,
-      tier,
+      tier: category,
       cached: false,
       dataVersion: orgDataVersion,
     },

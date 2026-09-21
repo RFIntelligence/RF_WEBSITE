@@ -140,3 +140,7 @@ export function saveToCache(
     timestamp: Date.now(),
   });
 }
+
+export function clearAskRfCache(): void {
+  memoryCache.clear();
+}
