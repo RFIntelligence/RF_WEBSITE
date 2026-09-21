@@ -1,132 +1,119 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { AlertTriangle, AlertCircle, Info, X } from "lucide-react";
-import type { DashboardAlert, AlertSeverity } from "@/app/types/dashboard";
-
-// ─── Config ───────────────────────────────────────────────────────────────────
-
-const SEVERITY_CONFIG: Record<
-  AlertSeverity,
-  { Icon: React.ElementType; borderColor: string; bgColor: string; iconColor: string; label: string }
-> = {
-  critical: {
-    Icon:        AlertTriangle,
-    borderColor: "rgba(242,78,75,0.35)",
-    bgColor:     "rgba(242,78,75,0.06)",
-    iconColor:   "var(--dash-status-error)",
-    label:       "Critical",
-  },
-  warning: {
-    Icon:        AlertCircle,
-    borderColor: "rgba(250,204,21,0.35)",
-    bgColor:     "rgba(250,204,21,0.06)",
-    iconColor:   "var(--dash-status-paused)",
-    label:       "Warning",
-  },
-  info: {
-    Icon:        Info,
-    borderColor: "rgba(96,165,250,0.35)",
-    bgColor:     "rgba(96,165,250,0.06)",
-    iconColor:   "var(--dash-chart-secondary)",
-    label:       "Info",
-  },
-};
-
-// ─── Single alert row ─────────────────────────────────────────────────────────
-
-function AlertRow({
-  alert,
-  onDismiss,
-}: {
-  alert: DashboardAlert;
-  onDismiss: (id: string) => void;
-}) {
-  const cfg = SEVERITY_CONFIG[alert.severity];
-  const { Icon } = cfg;
-
-  return (
-    <div
-      role="alert"
-      className="flex items-start gap-3 rounded-lg border p-3.5 transition-colors"
-      style={{ borderColor: cfg.borderColor, background: cfg.bgColor }}
-    >
-      <Icon aria-hidden className="mt-0.5 size-4 shrink-0" style={{ color: cfg.iconColor }} />
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span
-            className="rounded-sm px-1.5 py-0.5 text-[10px] font-mono tracking-wide uppercase"
-            style={{ background: `${cfg.iconColor}22`, color: cfg.iconColor }}
-          >
-            {cfg.label}
-          </span>
-          <p className="truncate text-[13px] font-medium text-[var(--text-primary)]">
-            {alert.title}
-          </p>
-        </div>
-        <p className="text-xs text-[var(--text-muted)] leading-relaxed">{alert.body}</p>
-        <Link
-          href={alert.ctaHref}
-          className="mt-1.5 inline-block text-xs font-medium transition-colors"
-          style={{ color: cfg.iconColor }}
-        >
-          {alert.ctaLabel} →
-        </Link>
-      </div>
-
-      {alert.dismissible && (
-        <button
-          type="button"
-          aria-label={`Dismiss alert: ${alert.title}`}
-          onClick={() => onDismiss(alert.id)}
-          className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-        >
-          <X aria-hidden className="size-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Panel ────────────────────────────────────────────────────────────────────
+import { AnimatePresence } from "framer-motion";
+import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import type { DashboardAlert } from "@/app/types/dashboard";
+import { AlertToast } from "@/app/components/ui/alert-toast";
+import { Button } from "@/app/components/ui/button";
 
 interface AlertsPanelProps {
   alerts: DashboardAlert[];
 }
 
+const SEVERITY_WEIGHT: Record<string, number> = {
+  critical: 3,
+  warning: 2,
+  info: 1,
+};
+
 export function AlertsPanel({ alerts: initialAlerts }: AlertsPanelProps) {
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = React.useState(false);
 
-  // Sync when the parent refreshes alert data (e.g. after insight action)
-  const [visible, setVisible] = React.useState<DashboardAlert[]>(initialAlerts);
-  React.useEffect(() => {
-    setVisible(initialAlerts.filter((a) => !dismissed.has(a.id)));
+  // Sync when parent updates alert data
+  const visible = React.useMemo(() => {
+    const list = initialAlerts.filter((a) => !dismissed.has(a.id));
+    return [...list].sort((a, b) => {
+      const weightDiff = (SEVERITY_WEIGHT[b.severity] ?? 0) - (SEVERITY_WEIGHT[a.severity] ?? 0);
+      return weightDiff;
+    });
   }, [initialAlerts, dismissed]);
 
-  function dismiss(id: string) {
+  function handleDismiss(id: string) {
     setDismissed((prev) => new Set(prev).add(id));
   }
 
-  if (visible.length === 0) return null;
+  const displayedAlerts = showAll ? visible : visible.slice(0, 3);
+  const hasMore = visible.length > 3;
 
   return (
-    <section aria-labelledby="alerts-heading">
-      <div className="mb-3">
-        <p className="dash-eyebrow">/ alerts</p>
-        <h2
-          id="alerts-heading"
-          className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]"
-        >
-          {visible.length} item{visible.length !== 1 ? "s" : ""} need attention
-        </h2>
+    <section aria-labelledby="alerts-heading" className="w-full">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="dash-eyebrow">/ alerts</p>
+          <h2
+            id="alerts-heading"
+            className="mt-0.5 text-base font-semibold text-[var(--text-primary)] tracking-tight"
+          >
+            {visible.length === 0 ? (
+              "All clear"
+            ) : (
+              <>
+                {visible.length} item{visible.length !== 1 ? "s" : ""} need attention
+              </>
+            )}
+          </h2>
+        </div>
+
+        {hasMore && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAll((s) => !s)}
+            className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] gap-1 h-7 px-2.5"
+          >
+            <span>{showAll ? "Show less" : `Show all (${visible.length})`}</span>
+            {showAll ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </Button>
+        )}
       </div>
-      <div className="space-y-2">
-        {visible.map((alert) => (
-          <AlertRow key={alert.id} alert={alert} onDismiss={dismiss} />
-        ))}
-      </div>
+
+      {visible.length === 0 ? (
+        <div className="rounded-xl border border-green-500/20 bg-green-950/10 p-4 flex items-center gap-3 text-green-400">
+          <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">You&apos;re all clear.</p>
+            <p className="text-xs text-[var(--text-muted)]">No pending risks or blocked projects at this time.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <AnimatePresence initial={false} mode="popLayout">
+            {displayedAlerts.map((alert) => {
+              const variant =
+                alert.severity === "critical"
+                  ? "error"
+                  : alert.severity === "warning"
+                  ? "warning"
+                  : "info";
+
+              const styleVariant = alert.severity === "critical" ? "filled" : "default";
+
+              return (
+                <AlertToast
+                  key={alert.id}
+                  variant={variant}
+                  styleVariant={styleVariant}
+                  title={alert.title}
+                  description={alert.body}
+                  className="max-w-none w-full"
+                  severityTag={alert.severity.toUpperCase()}
+                  onClose={() => handleDismiss(alert.id)}
+                  action={
+                    alert.ctaHref && alert.ctaLabel
+                      ? {
+                          label: `${alert.ctaLabel} →`,
+                          href: alert.ctaHref,
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
     </section>
   );
 }

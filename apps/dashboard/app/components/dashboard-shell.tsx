@@ -4,12 +4,16 @@ import * as React from "react";
 import { AppSidebar } from "@/app/components/app-sidebar";
 import { TopBar } from "@/app/components/top-bar";
 
+import { usePathname } from "next/navigation";
+
 interface DashboardShellProps {
   children: React.ReactNode;
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const [collapsed, setCollapsed] = React.useState(false);
+  const pathname = usePathname();
+  const isAskRf = pathname?.startsWith("/ask-rf");
 
   return (
     <div className="min-h-dvh bg-[var(--background)]">
@@ -35,8 +39,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 outline-none"
-          style={{ padding: "24px" }}
+          className="flex-1 outline-none flex flex-col"
+          style={{ padding: isAskRf ? 0 : "24px" }}
         >
           {children}
         </main>

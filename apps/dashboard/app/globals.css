@@ -148,7 +148,11 @@
   --color-sidebar-border:         var(--sidebar-border);
   --color-sidebar-ring:           var(--sidebar-ring);
   --color-success:                var(--success);
+  --color-success-foreground:     #0D0E12;
   --color-warning:                var(--warning);
+  --color-warning-foreground:     #0D0E12;
+  --color-info:                   #60A5FA;
+  --color-info-foreground:        #0D0E12;
 
   /* ── Dashboard-specific colours ── */
   --color-dash-sidebar-bg:      var(--dash-sidebar-bg);
@@ -280,3 +284,25 @@
   text-transform: uppercase;
   color: var(--accent);
 }
+
+@keyframes gradient-shine {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-shine {
+  animation: gradient-shine 7s ease-in-out infinite;
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.5); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient-shine {
+    animation: none;
+  }
+}
+
