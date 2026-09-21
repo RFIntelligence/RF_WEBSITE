@@ -70,33 +70,37 @@ interface ApiNotification {
   createdAt: string;
 }
 
+import useSWR from "swr";
+
+const notificationsFetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to load notifications");
+  return res.json() as Promise<{
+    notifications: ApiNotification[];
+    unreadCount: number;
+  }>;
+};
+
 function NotificationBell() {
   const { session } = useSession();
   const orgId = session?.organization?.id ?? null;
 
-  const [notifications, setNotifications] = React.useState<ApiNotification[]>([]);
-  const [unreadCount, setUnreadCount] = React.useState(0);
+  const { data: notifData, mutate: reloadNotifications } = useSWR(
+    session ? "/api/notifications?limit=20" : null,
+    notificationsFetcher,
+    {
+      dedupingInterval: 30_000,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+    }
+  );
+
+  const notifications = notifData?.notifications ?? [];
+  const unreadCount = notifData?.unreadCount ?? 0;
 
   const load = React.useCallback(async () => {
-    try {
-      const res = await fetch("/api/notifications?limit=20");
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        notifications: ApiNotification[];
-        unreadCount: number;
-      };
-      setNotifications(data.notifications);
-      setUnreadCount(data.unreadCount);
-    } catch {
-      // The bell is non-critical; leave the last known state in place.
-    }
-  }, []);
-
-  React.useEffect(() => {
-    if (session) {
-      void load();
-    }
-  }, [session, load]);
+    await reloadNotifications();
+  }, [reloadNotifications]);
 
   const handleRealtime = React.useCallback(
     (event: RealtimeEvent) => {
@@ -139,8 +143,10 @@ function NotificationBell() {
   }, [live, session, load]);
 
   const markAllRead = React.useCallback(async () => {
-    setUnreadCount(0);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    void reloadNotifications(
+      (prev) => (prev ? { unreadCount: 0, notifications: prev.notifications.map((n) => ({ ...n, read: true })) } : prev),
+      false,
+    );
     try {
       await fetch("/api/notifications", {
         method: "PATCH",
@@ -150,7 +156,7 @@ function NotificationBell() {
     } catch {
       void load();
     }
-  }, [load]);
+  }, [reloadNotifications, load]);
 
   return (
     <DropdownMenu>

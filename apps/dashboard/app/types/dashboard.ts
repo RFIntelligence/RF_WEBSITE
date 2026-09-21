@@ -64,6 +64,21 @@ export interface RecentConversation {
 
 // ─── Dashboard API response ───────────────────────────────────────────────────
 
+export interface SectionErrors {
+  projects?: boolean;
+  insights?: boolean;
+  metrics?: boolean;
+  alerts?: boolean;
+  conversations?: boolean;
+  counts?: {
+    projects?: boolean;
+    conversations?: boolean;
+    insights?: boolean;
+    renewal?: boolean;
+    team?: boolean;
+  };
+}
+
 export interface DashboardData {
   /** Greeting name from the signed-in user's profile */
   userName: string;
@@ -76,4 +91,6 @@ export interface DashboardData {
   alerts: DashboardAlert[];
   /** Up to 5 most-recently-updated conversations */
   recentConversations: RecentConversation[];
+  /** Per-section error flags indicating which sections failed to load (e.g. timeout or P1001) */
+  errors?: SectionErrors;
 }

@@ -41,9 +41,15 @@ vi.mock("next/headers", () => ({
 vi.mock("@/app/lib/db", () => ({
   prisma: {
     user: {
-      findUnique: vi.fn(async (args: { where: { id: string } }) =>
-        h.users.find((u) => u.id === args.where.id) ?? null
-      ),
+      findUnique: vi.fn(async (args: { where: { id: string }; select?: any }) => {
+        const u = h.users.find((user) => user.id === args.where.id);
+        if (!u) return null;
+        const org = h.organizations.find((o) => o.id === u.organizationId) ?? null;
+        return {
+          ...u,
+          organization: org,
+        };
+      }),
     },
     organization: {
       findUnique: vi.fn(async (args: { where: { id: string } }) =>

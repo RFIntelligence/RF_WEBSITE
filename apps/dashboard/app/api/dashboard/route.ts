@@ -64,7 +64,7 @@ function parseChartData(json: string): ChartDataPoint[] {
 async function buildMetricCards(
   orgId: string,
   now: Date,
-): Promise<MetricCard[]> {
+): Promise<{ cards: MetricCard[]; countErrors: Record<string, boolean> }> {
   const thirtyDaysAgo  = new Date(now.getTime() - 30 * 86_400_000);
   const sixtyDaysAgo   = new Date(now.getTime() - 60 * 86_400_000);
   const quarterAgo     = new Date(now.getTime() - 90 * 86_400_000);
@@ -127,6 +127,14 @@ async function buildMetricCards(
     }),
   ]);
 
+  const countErrors = {
+    projects: results[0].status === "rejected" || results[1].status === "rejected",
+    conversations: results[2].status === "rejected" || results[3].status === "rejected",
+    insights: results[4].status === "rejected" || results[5].status === "rejected",
+    renewal: results[8].status === "rejected" || results[9].status === "rejected",
+    team: results[6].status === "rejected" || results[7].status === "rejected",
+  };
+
   const val = (idx: number) => results[idx].status === "fulfilled" ? (results[idx] as PromiseFulfilledResult<number>).value : 0;
 
   const activeProjectCount = val(0);
@@ -151,7 +159,7 @@ async function buildMetricCards(
   const insightDelta = insightCount30d    - insightCount60d;
   const memberDelta  = memberCount        - prevMemberCount;
 
-  return [
+  const cards: MetricCard[] = [
     {
       id: "mc_projects",
       label: "Active Projects",
@@ -213,6 +221,8 @@ async function buildMetricCards(
       period: "in this workspace",
     },
   ];
+
+  return { cards, countErrors };
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -442,23 +452,33 @@ export async function GET(): Promise<Response> {
       buildRecentConversations(orgId),
     ]);
 
-    const errors: Record<string, boolean> = {
+    const metricResult = metricCardsRes.status === "fulfilled" ? metricCardsRes.value : null;
+    const metricCards = metricResult?.cards ?? [];
+    const countErrors = metricResult?.countErrors;
+
+    const errors: Record<string, any> = {
       projects: projectsRes.status === "rejected",
       insights: insightsRes.status === "rejected",
       metrics: metricCardsRes.status === "rejected",
       alerts: alertsRes.status === "rejected",
       conversations: conversationsRes.status === "rejected",
+      counts: countErrors ?? {
+        projects: metricCardsRes.status === "rejected",
+        conversations: metricCardsRes.status === "rejected",
+        insights: metricCardsRes.status === "rejected",
+        renewal: metricCardsRes.status === "rejected",
+        team: metricCardsRes.status === "rejected",
+      },
     };
 
     const user = userRes.status === "fulfilled" ? userRes.value : null;
-    const metricCards = metricCardsRes.status === "fulfilled" ? metricCardsRes.value : [];
     const rawProjects = projectsRes.status === "fulfilled" ? projectsRes.value : [];
     const rawInsights = insightsRes.status === "fulfilled" ? insightsRes.value : [];
     const unreadInsightCount = unreadInsightRes.status === "fulfilled" ? unreadInsightRes.value : 0;
     const alerts = alertsRes.status === "fulfilled" ? alertsRes.value : [];
     const recentConversations = conversationsRes.status === "fulfilled" ? conversationsRes.value : [];
 
-    const payload: DashboardData & { errors?: Record<string, boolean> } = {
+    const payload: DashboardData = {
       userName:           user?.name ?? session.name ?? "there",
       metricCards,
       projects:           rawProjects.map((p) => serializeProject(p as ProjectRow)),
@@ -471,7 +491,7 @@ export async function GET(): Promise<Response> {
 
     // Cache successful parts
     dashboardCache.set(orgId, {
-      data: payload as DashboardData,
+      data: payload,
       expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
     });
 

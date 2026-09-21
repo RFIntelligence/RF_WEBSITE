@@ -11,6 +11,11 @@ export interface Session {
   name: string;
   email: string;
   role: string;
+  organization?: {
+    id: string;
+    name: string;
+    plan: string;
+  } | null;
 }
 
 interface TokenPayload {
@@ -24,7 +29,7 @@ interface CachedSession {
   expiresAt: number;
 }
 const sessionCache = new Map<string, CachedSession>();
-const SESSION_CACHE_TTL_MS = 45_000; // 45 seconds LRU cache
+const SESSION_CACHE_TTL_MS = 45_000; // 45 seconds in-memory cache keyed by session/user id
 
 export function invalidateSessionCache(userId: string) {
   sessionCache.delete(userId);
@@ -86,7 +91,9 @@ export function verifySessionToken(
 
 /**
  * Resolves the current session from the signed, httpOnly cookie.
- * Validates the cookie first, checks in-memory LRU cache (30-60s), and hits DB only when needed.
+ * Validates the cookie first, checks in-memory cache (45s), and hits DB only when needed.
+ * Combines user + organization into ONE single DB query with include: { organization: true }
+ * to eliminate extra round-trips over high latency connections.
  */
 export async function getSession(): Promise<Session | null> {
   const store = await cookies();
@@ -96,7 +103,7 @@ export async function getSession(): Promise<Session | null> {
   const verified = verifySessionToken(token);
   if (!verified) return null;
 
-  // Check LRU cache
+  // Check in-memory cache
   const cached = sessionCache.get(verified.uid);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.session;
@@ -110,6 +117,13 @@ export async function getSession(): Promise<Session | null> {
       name: true,
       email: true,
       role: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          plan: true,
+        },
+      },
     },
   });
   if (!user) return null;
@@ -120,9 +134,10 @@ export async function getSession(): Promise<Session | null> {
     name: user.name,
     email: user.email,
     role: user.role,
+    organization: user.organization,
   };
 
-  // Cache session
+  // Cache combined session in memory
   sessionCache.set(verified.uid, {
     session,
     expiresAt: Date.now() + SESSION_CACHE_TTL_MS,

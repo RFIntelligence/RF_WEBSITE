@@ -20,13 +20,22 @@ import type * as AblyType from "ably";
 interface SharedClient {
   realtime: AblyType.Realtime;
   refCount: number;
+  currentChannel: string | null;
 }
 let sharedClient: SharedClient | null = null;
 let sharedClientPromise: Promise<AblyType.Realtime | null> | null = null;
+let activeRequestedChannel: string | null = null;
 
-async function getSharedRealtime(): Promise<AblyType.Realtime | null> {
+async function getSharedRealtime(channelName?: string): Promise<AblyType.Realtime | null> {
+  if (channelName) {
+    activeRequestedChannel = channelName;
+  }
+
   if (sharedClient) {
     sharedClient.refCount++;
+    if (channelName) {
+      sharedClient.currentChannel = channelName;
+    }
     return sharedClient.realtime;
   }
   if (sharedClientPromise) {
@@ -36,12 +45,26 @@ async function getSharedRealtime(): Promise<AblyType.Realtime | null> {
   sharedClientPromise = (async () => {
     try {
       const Ably = await import("ably");
-      // Ably client with authCallback or dynamic authUrl
+      // Use authCallback so every token request includes the channel parameter
       const realtime = new Ably.Realtime({
-        authUrl: "/api/realtime/auth",
-        authMethod: "GET",
+        authCallback: async (tokenParams, callback) => {
+          try {
+            const targetChannel = activeRequestedChannel || "";
+            const query = targetChannel ? `?channel=${encodeURIComponent(targetChannel)}` : "";
+            const res = await fetch(`/api/realtime/auth${query}`, { method: "GET" });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              const msg = err.error || `HTTP ${res.status}`;
+              return (callback as any)(new Error(msg), null);
+            }
+            const tokenRequest = await res.json();
+            (callback as any)(null, tokenRequest);
+          } catch (err: any) {
+            (callback as any)(err, null);
+          }
+        },
       });
-      sharedClient = { realtime, refCount: 1 };
+      sharedClient = { realtime, refCount: 1, currentChannel: channelName ?? null };
       return realtime;
     } finally {
       sharedClientPromise = null;
@@ -94,7 +117,7 @@ export function useOrgRealtime(
         const probe = await fetch(authProbe, { method: "GET" });
         if (!probe.ok || closed) return;
 
-        const realtime = await getSharedRealtime();
+        const realtime = await getSharedRealtime(channelName);
         if (closed || !realtime) return;
 
         const channel = realtime.channels.get(channelName);

@@ -48,6 +48,31 @@ interface CachedToken {
 const tokenCache = new Map<string, CachedToken>();
 const TOKEN_TTL_MS = 50 * 60 * 1000; // 50 minutes
 
+export async function createOrgTokenRequest(
+  organizationId: string,
+  clientId: string,
+): Promise<unknown> {
+  const cacheKey = `org:${organizationId}::${clientId}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.tokenRequest;
+  }
+
+  const rest = getRestClient();
+  const pattern = `rf-intel:org:${organizationId}:*`;
+  const tokenRequest = await rest.auth.createTokenRequest({
+    clientId,
+    capability: JSON.stringify({ [pattern]: ["subscribe"] }),
+  });
+
+  tokenCache.set(cacheKey, {
+    tokenRequest,
+    expiresAt: Date.now() + TOKEN_TTL_MS,
+  });
+
+  return tokenRequest;
+}
+
 /**
  * Issues an Ably token request scoped to a single channel. The caller MUST have
  * already verified that the session belongs to the channel's organization.

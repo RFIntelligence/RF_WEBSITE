@@ -19,19 +19,23 @@ export async function GET(): Promise<Response> {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let organization: { id: string; name: string; plan: string } | null = null;
-    const cached = orgCache.get(session.organizationId);
-    if (cached && cached.expiresAt > Date.now()) {
-      organization = cached.org;
-    } else {
-      organization = await prisma.organization.findUnique({
-        where: { id: session.organizationId },
-        select: { id: true, name: true, plan: true },
-      });
-      orgCache.set(session.organizationId, {
-        org: organization,
-        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-      });
+    // Organization is already joined in getSession() in a single round-trip.
+    // Fall back to database query only if session didn't include it.
+    let organization = session.organization;
+    if (organization === undefined) {
+      const cached = orgCache.get(session.organizationId);
+      if (cached && cached.expiresAt > Date.now()) {
+        organization = cached.org;
+      } else {
+        organization = await prisma.organization.findUnique({
+          where: { id: session.organizationId },
+          select: { id: true, name: true, plan: true },
+        });
+        orgCache.set(session.organizationId, {
+          org: organization,
+          expiresAt: Date.now() + ORG_CACHE_TTL_MS,
+        });
+      }
     }
 
     return Response.json({
@@ -41,7 +45,7 @@ export async function GET(): Promise<Response> {
         email: session.email,
         role: session.role,
       },
-      organization,
+      organization: organization ?? null,
     });
   });
 }

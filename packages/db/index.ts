@@ -6,7 +6,10 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient(): PrismaClient {
   const isDev = process.env.NODE_ENV === "development";
+  const databaseUrl = process.env.DATABASE_URL_LOCAL || process.env.DATABASE_URL;
+
   const client = new PrismaClient({
+    datasourceUrl: databaseUrl,
     log: isDev
       ? [
           { emit: "event", level: "query" },

@@ -2,6 +2,7 @@ import { getSession } from "@/app/lib/session";
 import { parseOrganizationFromChannel } from "@/app/lib/realtime/channels";
 import {
   createChannelTokenRequest,
+  createOrgTokenRequest,
   isRealtimeConfigured,
 } from "@/app/lib/realtime/server";
 
@@ -41,7 +42,24 @@ async function authorize(
     if (!session) return json({ error: "Unauthorized" }, 401);
 
     const channel = channelFrom(request, body);
-    if (!channel) return json({ error: "A channel name is required" }, 400);
+    if (!channel) {
+      if (!isRealtimeConfigured()) {
+        return json(
+          { error: "Realtime is not configured", configured: false },
+          503,
+        );
+      }
+      try {
+        const tokenRequest = await createOrgTokenRequest(
+          session.organizationId,
+          session.userId,
+        );
+        return Response.json(tokenRequest);
+      } catch (error) {
+        console.error("realtime: failed to authorize org token", error);
+        return json({ error: "Could not authorize channel" }, 500);
+      }
+    }
 
     const channelOrganizationId = parseOrganizationFromChannel(channel);
     if (!channelOrganizationId) return json({ error: "Unknown channel" }, 400);

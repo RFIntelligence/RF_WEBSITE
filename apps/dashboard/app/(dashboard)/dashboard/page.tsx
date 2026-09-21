@@ -81,7 +81,7 @@ export default function DashboardPage() {
       <Separator className="bg-[var(--border)]" />
 
       {/* 2. Bento Stats Grid */}
-      <BentoChartsGrid data={data} />
+      <BentoChartsGrid data={data} onRetry={() => void mutate()} />
 
       <Separator className="bg-[var(--border)]" />
 

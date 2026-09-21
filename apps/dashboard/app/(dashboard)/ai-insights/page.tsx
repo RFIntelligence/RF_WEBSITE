@@ -5,28 +5,32 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { InsightsFeed } from "@/app/components/dashboard/insights-feed";
 import type { Insight } from "@/app/types/insight";
 
+import useSWR from "swr";
+
+const insightsFetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as { insights: Insight[] };
+  return data.insights;
+};
+
 export default function AIInsightsPage() {
-  const [insights, setInsights]   = useState<Insight[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const {
+    data: fetchedInsights,
+    error: swrError,
+    isLoading: loading,
+    mutate: mutateInsights,
+  } = useSWR<Insight[]>("/api/insights", insightsFetcher, {
+    dedupingInterval: 30_000,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+  });
+
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeMsg, setAnalyzeMsg] = useState<string | null>(null);
 
-  const loadInsights = useCallback(async () => {
-    try {
-      const res = await fetch("/api/insights");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { insights: Insight[] };
-      setInsights(data.insights);
-      setError(null);
-    } catch {
-      setError("Failed to load insights. Please refresh.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadInsights(); }, [loadInsights]);
+  const insights = fetchedInsights ?? [];
+  const error = swrError ? "Failed to load insights. Please refresh." : null;
 
   const handleAnalyze = useCallback(async () => {
     setAnalyzing(true);
@@ -36,13 +40,13 @@ export default function AIInsightsPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setAnalyzeMsg("Analysis queued. New insights will appear once complete.");
       // Poll once after 8 seconds to pick up fast results
-      setTimeout(() => { void loadInsights(); }, 8_000);
+      setTimeout(() => { void mutateInsights(); }, 8_000);
     } catch {
       setAnalyzeMsg("Could not start analysis. Please try again.");
     } finally {
       setAnalyzing(false);
     }
-  }, [loadInsights]);
+  }, [mutateInsights]);
 
   /**
    * Called by InsightsFeed after a successful action API call.
@@ -50,8 +54,8 @@ export default function AIInsightsPage() {
    * This keeps the unread count accurate without a full page refetch.
    */
   const handleInsightUpdated = useCallback((updated: Insight) => {
-    setInsights((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-  }, []);
+    void mutateInsights((prev) => (prev ? prev.map((i) => (i.id === updated.id ? updated : i)) : [updated]), false);
+  }, [mutateInsights]);
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-6">
