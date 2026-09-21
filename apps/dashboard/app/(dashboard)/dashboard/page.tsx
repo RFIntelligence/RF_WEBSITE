@@ -1,16 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useDashboard } from "@/app/lib/use-dashboard";
 import { Loader2 } from "lucide-react";
-
-import type { DashboardData } from "@/app/types/dashboard";
-import type { Insight }       from "@/app/types/insight";
-import type { Project }       from "@/app/types/project";
-
-import { DashboardHeader }    from "@/app/components/dashboard/DashboardHeader";
-import { BentoChartsGrid }    from "@/app/components/dashboard/BentoChartsGrid";
-import { AlertsPanel }        from "@/app/components/dashboard/alerts-panel";
-import { Separator }          from "@/app/components/ui/separator";
+import { DashboardHeader } from "@/app/components/dashboard/DashboardHeader";
+import { BentoChartsGrid } from "@/app/components/dashboard/BentoChartsGrid";
+import { AlertsPanel } from "@/app/components/dashboard/alerts-panel";
+import { Separator } from "@/app/components/ui/separator";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -46,81 +41,52 @@ function DashboardSkeleton() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [data, setData]       = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const refetching            = useRef(false);
+  const { data, isLoading, mutate } = useDashboard();
 
-  // ── Full fetch ──────────────────────────────────────────────────────────────
-  const fetchDashboard = useCallback(async () => {
-    if (refetching.current) return;
-    refetching.current = true;
-    try {
-      const res = await fetch("/api/dashboard");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as DashboardData);
-    } catch {
-      // Keep stale data on refetch failure; blank only on first load
-    } finally {
-      refetching.current = false;
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchDashboard();
-  }, [fetchDashboard]);
-
-  // ── Reactive project event ──────────────────────────────────────────────────
-  useEffect(() => {
-    function onProjectCreated(e: Event) {
-      const project = (e as CustomEvent<Project>).detail;
-      setData((prev) => {
-        if (!prev) return prev;
-        const newProjects = [project, ...prev.projects].slice(0, 5);
-        return { ...prev, projects: newProjects };
-      });
-      void fetchDashboard();
-    }
-    window.addEventListener("rf:project-created", onProjectCreated);
-    return () => window.removeEventListener("rf:project-created", onProjectCreated);
-  }, [fetchDashboard]);
-
-  // ── Render ───────────────────────────────────────────────────────────────────
-  if (loading) return <DashboardSkeleton />;
+  if (isLoading && !data) return <DashboardSkeleton />;
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-[1200px] flex items-center justify-center py-24 text-xs text-[var(--text-muted)] gap-2">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Unable to load dashboard. Please refresh.
+      <div className="mx-auto max-w-[1200px] flex flex-col items-center justify-center py-24 text-xs text-[var(--text-muted)] gap-3">
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          <span>Unable to reach dashboard data.</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void mutate()}
+          className="px-3 py-1.5 rounded-md bg-[var(--surface-elevated)] hover:bg-[var(--surface)] text-[var(--text-primary)] border border-white/10 text-xs font-mono transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
   // Active project count from metricCards or projects list
   const activeProjectsCount =
-    data.metricCards.find((c) => c.id === "mc_projects")?.rawValue ??
-    data.projects.filter((p) => p.status !== "COMPLETED").length;
+    data.metricCards?.find((c) => c.id === "mc_projects")?.rawValue ??
+    data.projects?.filter((p) => p.status !== "COMPLETED").length ?? 0;
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-10">
-      {/* 1. Header (Eyebrow, time-aware greeting, contextual line, insights pill, desktop date) */}
+      {/* 1. Header */}
       <DashboardHeader
         userName={data.userName}
         activeProjectsCount={activeProjectsCount}
-        alertsCount={data.alerts.length}
-        unreadInsightCount={data.unreadInsightCount}
+        alertsCount={data.alerts?.length ?? 0}
+        unreadInsightCount={data.unreadInsightCount ?? 0}
       />
 
       <Separator className="bg-[var(--border)]" />
 
-      {/* 2. Bento Stats Grid (5 Cards: Active Projects, Acceptance Rate, AI Insights, Open Conversations, Team Members) */}
+      {/* 2. Bento Stats Grid */}
       <BentoChartsGrid data={data} />
 
       <Separator className="bg-[var(--border)]" />
 
       {/* 3. Alerts Section */}
-      <AlertsPanel alerts={data.alerts} />
+      <AlertsPanel alerts={data.alerts ?? []} />
     </div>
   );
 }

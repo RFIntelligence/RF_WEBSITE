@@ -162,13 +162,16 @@ export async function POST(request: Request): Promise<Response> {
     metadata: { email, role },
   });
 
+  const { notifyOrgDataChanged } = await import("@/app/lib/data-sync");
+  await notifyOrgDataChanged(session.organizationId, ["team"]);
+
   return json(
     {
       invitation: {
         id: invitation.id,
         email: invitation.email,
         role: invitation.role,
-        expiresAt: invitation.expiresAt,
+        expiresAt: invitation.expiresAt.toISOString(),
       },
     },
     201,

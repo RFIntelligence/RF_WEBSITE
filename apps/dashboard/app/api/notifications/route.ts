@@ -18,35 +18,39 @@ function parseLimit(raw: string | null): number {
     : DEFAULT_LIMIT;
 }
 
+import { withTiming } from "@/app/lib/timing";
+
 export async function GET(request: Request): Promise<Response> {
-  const session = await getSession();
-  if (!session) return json({ error: "Unauthorized" }, 401);
+  return withTiming("GET /api/notifications", async () => {
+    const session = await getSession();
+    if (!session) return json({ error: "Unauthorized" }, 401);
 
-  const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
+    const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
 
-  const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
-      where: { organizationId: session.organizationId, userId: session.userId },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      select: {
-        id: true,
-        title: true,
-        body: true,
-        read: true,
-        createdAt: true,
-      },
-    }),
-    prisma.notification.count({
-      where: {
-        organizationId: session.organizationId,
-        userId: session.userId,
-        read: false,
-      },
-    }),
-  ]);
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { organizationId: session.organizationId, userId: session.userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          read: true,
+          createdAt: true,
+        },
+      }),
+      prisma.notification.count({
+        where: {
+          organizationId: session.organizationId,
+          userId: session.userId,
+          read: false,
+        },
+      }),
+    ]);
 
-  return json({ notifications, unreadCount });
+    return json({ notifications, unreadCount });
+  });
 }
 
 /**

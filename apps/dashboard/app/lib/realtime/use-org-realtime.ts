@@ -6,15 +6,69 @@ import { orgChannel, type RealtimeScope } from "@/app/lib/realtime/channels";
 /**
  * Subscribes to the organization-scoped realtime channel.
  *
- * The channel authorization endpoint verifies that the current session belongs
- * to the channel's organization before issuing credentials. When realtime is
- * not configured (or the connection cannot be established) `live` stays `false`
- * and callers are expected to fall back to polling.
+ * Reuses ONE global Ably connection across the entire client app,
+ * rather than opening multiple WebSocket connections.
  */
 
 export interface RealtimeEvent {
   name: string;
   data: unknown;
+}
+
+interface AblyRealtimeLike {
+  channels: {
+    get: (name: string) => {
+      subscribe: (fn: (msg: { name?: string; data?: unknown }) => void) => Promise<void> | void;
+      unsubscribe: (fn: (msg: { name?: string; data?: unknown }) => void) => Promise<void> | void;
+    };
+  };
+  close: () => void;
+}
+
+interface SharedClient {
+  realtime: AblyRealtimeLike;
+  refCount: number;
+}
+let sharedClient: SharedClient | null = null;
+let sharedClientPromise: Promise<AblyRealtimeLike | null> | null = null;
+
+async function getSharedRealtime(): Promise<AblyRealtimeLike | null> {
+  if (sharedClient) {
+    sharedClient.refCount++;
+    return sharedClient.realtime;
+  }
+  if (sharedClientPromise) {
+    return sharedClientPromise;
+  }
+
+  sharedClientPromise = (async () => {
+    try {
+      const Ably = await import("ably");
+      // Ably client with authCallback or dynamic authUrl
+      const realtime = new Ably.Realtime({
+        authUrl: "/api/realtime/auth",
+        authMethod: "GET",
+      });
+      sharedClient = { realtime, refCount: 1 };
+      return realtime;
+    } finally {
+      sharedClientPromise = null;
+    }
+  })();
+
+  return sharedClientPromise;
+}
+
+function releaseSharedRealtime() {
+  if (sharedClient) {
+    sharedClient.refCount--;
+    if (sharedClient.refCount <= 0) {
+      try {
+        sharedClient.realtime.close();
+      } catch {}
+      sharedClient = null;
+    }
+  }
 }
 
 export function useOrgRealtime(
@@ -32,25 +86,31 @@ export function useOrgRealtime(
   useEffect(() => {
     if (!organizationId) return;
 
-    const channel = orgChannel(organizationId, scope);
-    const authUrl = `/api/realtime/auth?channel=${encodeURIComponent(channel)}`;
+    const channelName = orgChannel(organizationId, scope);
     let closed = false;
-    let client: { close: () => void } | null = null;
+    let unsubscriber: (() => void) | null = null;
 
     async function connect() {
       try {
-        const probe = await fetch(authUrl, { method: "GET" });
+        // Fast probe to verify realtime auth endpoint is reachable
+        const authProbe = `/api/realtime/auth?channel=${encodeURIComponent(channelName)}`;
+        const probe = await fetch(authProbe, { method: "GET" });
         if (!probe.ok || closed) return;
 
-        const Ably = await import("ably");
-        if (closed) return;
+        const realtime = await getSharedRealtime();
+        if (closed || !realtime) return;
 
-        const realtime = new Ably.Realtime({ authUrl });
-        client = realtime;
-
-        await realtime.channels.get(channel).subscribe((message) => {
+        const channel = realtime.channels.get(channelName);
+        const listener = (message: { name?: string; data?: unknown }) => {
           handlerRef.current({ name: message.name ?? "", data: message.data });
-        });
+        };
+
+        await channel.subscribe(listener);
+        unsubscriber = () => {
+          try {
+            channel.unsubscribe(listener);
+          } catch {}
+        };
 
         if (!closed) setLive(true);
       } catch (error) {
@@ -63,7 +123,8 @@ export function useOrgRealtime(
 
     return () => {
       closed = true;
-      client?.close();
+      if (unsubscriber) unsubscriber();
+      releaseSharedRealtime();
     };
   }, [organizationId, scope]);
 

@@ -145,5 +145,8 @@ export async function POST(
     },
   };
 
+  const { notifyOrgDataChanged } = await import("@/app/lib/data-sync");
+  await notifyOrgDataChanged(session.organizationId, ["insights", "alerts"]);
+
   return Response.json({ insight: updated });
 }

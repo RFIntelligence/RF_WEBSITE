@@ -4,9 +4,10 @@
  * Single round-trip that returns every dataset the Dashboard Overview page
  * needs. All queries are scoped by organizationId from the verified session.
  *
- * Shape:
- *   { userName, metricCards[], projects[], insights[], unreadInsightCount,
- *     alerts[], recentConversations[] }
+ * Resilience: Uses Promise.allSettled so if individual queries fail or time out,
+ * the parts that succeeded are returned along with section-level error flags,
+ * rather than failing with a blanket 500 error.
+ * Short in-memory server cache (15-30s) tagged per organization.
  */
 
 import { getSession } from "@/app/lib/session";
@@ -14,9 +15,24 @@ import { prisma }     from "@/app/lib/db";
 import type { DashboardData, MetricCard, DashboardAlert, RecentConversation } from "@/app/types/dashboard";
 import type { Project }  from "@/app/types/project";
 import type { Insight, InsightActionStatus, ChartDataPoint } from "@/app/types/insight";
+import { withTiming } from "@/app/lib/timing";
+import { PROJECT_SELECT, serializeProject, type ProjectRow } from "@/app/api/projects/route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// ─── Organization Dashboard Server Cache (20s TTL) ───────────────────────────
+
+interface CachedDashboard {
+  data: DashboardData;
+  expiresAt: number;
+}
+const dashboardCache = new Map<string, CachedDashboard>();
+const DASHBOARD_CACHE_TTL_MS = 20_000;
+
+export function invalidateDashboardCache(orgId: string) {
+  dashboardCache.delete(orgId);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,9 +60,6 @@ function parseChartData(json: string): ChartDataPoint[] {
 }
 
 // ─── Metric card computation ──────────────────────────────────────────────────
-//
-// Counts are derived from live DB rows. Deltas compare the current 30-day
-// window against the prior 30-day window so they stay meaningful over time.
 
 async function buildMetricCards(
   orgId: string,
@@ -54,23 +67,15 @@ async function buildMetricCards(
 ): Promise<MetricCard[]> {
   const thirtyDaysAgo  = new Date(now.getTime() - 30 * 86_400_000);
   const sixtyDaysAgo   = new Date(now.getTime() - 60 * 86_400_000);
-  const yesterday      = new Date(now.getTime() -      86_400_000);
+  const quarterAgo     = new Date(now.getTime() - 90 * 86_400_000);
+  const prevQuarterAgo = new Date(now.getTime() - 180 * 86_400_000);
+  const yesterday      = new Date(now.getTime() - 86_400_000);
 
-  const [
-    activeProjectCount,
-    prevProjectCount,
-    openConvCount,
-    prevConvCount,
-    insightCount30d,
-    insightCount60d,
-    memberCount,
-    prevMemberCount,
-  ] = await Promise.all([
-    // Active projects now
+  // Grouped counts with fallback
+  const results = await Promise.allSettled([
     prisma.project.count({
       where: { organizationId: orgId, status: { not: "COMPLETED" } },
     }),
-    // Active projects before last 30 days (as a "last month" baseline)
     prisma.project.count({
       where: {
         organizationId: orgId,
@@ -78,52 +83,35 @@ async function buildMetricCards(
         createdAt: { lt: thirtyDaysAgo },
       },
     }),
-    // Open (unread) conversations
     prisma.conversation.count({
       where: { organizationId: orgId, unread: true },
     }),
-    // Open conversations older than yesterday (i.e., "since yesterday" delta)
     prisma.conversation.count({
       where: { organizationId: orgId, unread: true, createdAt: { lt: yesterday } },
     }),
-    // AI insights last 30 days
     prisma.insight.count({
       where: { organizationId: orgId, createdAt: { gte: thirtyDaysAgo } },
     }),
-    // AI insights 30–60 days ago (prior window)
     prisma.insight.count({
       where: {
         organizationId: orgId,
         createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
       },
     }),
-    // Current team size
     prisma.user.count({ where: { organizationId: orgId } }),
-    // Team size 30 days ago (created before then)
     prisma.user.count({
       where: { organizationId: orgId, createdAt: { lt: thirtyDaysAgo } },
     }),
-  ]);
-
-  // Renewal rate: accepted insights / total insights with actions in last quarter
-  const quarterAgo = new Date(now.getTime() - 90 * 86_400_000);
-  const [totalActioned, acceptedActioned] = await Promise.all([
     prisma.insightAction.count({
       where: { organizationId: orgId, performedAt: { gte: quarterAgo } },
     }),
     prisma.insightAction.count({
       where: {
         organizationId: orgId,
-        actionStatus:   "ACCEPTED",
-        performedAt:    { gte: quarterAgo },
+        actionStatus: "ACCEPTED",
+        performedAt: { gte: quarterAgo },
       },
     }),
-  ]);
-  const renewalRate    = totalActioned > 0
-    ? Math.round((acceptedActioned / totalActioned) * 100)
-    : 0;
-  const prevQuarterAgo = new Date(now.getTime() - 180 * 86_400_000);
-  const [prevTotal, prevAccepted] = await Promise.all([
     prisma.insightAction.count({
       where: {
         organizationId: orgId,
@@ -133,14 +121,29 @@ async function buildMetricCards(
     prisma.insightAction.count({
       where: {
         organizationId: orgId,
-        actionStatus:   "ACCEPTED",
-        performedAt:    { gte: prevQuarterAgo, lt: quarterAgo },
+        actionStatus: "ACCEPTED",
+        performedAt: { gte: prevQuarterAgo, lt: quarterAgo },
       },
     }),
   ]);
-  const prevRenewalRate = prevTotal > 0
-    ? Math.round((prevAccepted / prevTotal) * 100)
-    : 0;
+
+  const val = (idx: number) => results[idx].status === "fulfilled" ? (results[idx] as PromiseFulfilledResult<number>).value : 0;
+
+  const activeProjectCount = val(0);
+  const prevProjectCount   = val(1);
+  const openConvCount      = val(2);
+  const prevConvCount      = val(3);
+  const insightCount30d    = val(4);
+  const insightCount60d    = val(5);
+  const memberCount        = val(6);
+  const prevMemberCount    = val(7);
+  const totalActioned      = val(8);
+  const acceptedActioned   = val(9);
+  const prevTotal          = val(10);
+  const prevAccepted       = val(11);
+
+  const renewalRate = totalActioned > 0 ? Math.round((acceptedActioned / totalActioned) * 100) : 0;
+  const prevRenewalRate = prevTotal > 0 ? Math.round((prevAccepted / prevTotal) * 100) : 0;
   const renewalDelta = renewalRate - prevRenewalRate;
 
   const projectDelta = activeProjectCount - prevProjectCount;
@@ -150,72 +153,72 @@ async function buildMetricCards(
 
   return [
     {
-      id:         "mc_projects",
-      label:      "Active Projects",
-      value:      String(activeProjectCount),
-      rawValue:   activeProjectCount,
-      delta:      signed(projectDelta),
+      id: "mc_projects",
+      label: "Active Projects",
+      value: String(activeProjectCount),
+      rawValue: activeProjectCount,
+      delta: signed(projectDelta),
       deltaValue: projectDelta,
-      trend:      projectDelta > 0 ? "up" : projectDelta < 0 ? "down" : "flat",
-      chipColor:  "blue",
-      iconKey:    "folder-kanban",
-      period:     "vs last month",
+      trend: projectDelta > 0 ? "up" : projectDelta < 0 ? "down" : "flat",
+      chipColor: "blue",
+      iconKey: "folder-kanban",
+      period: "vs last month",
     },
     {
-      id:         "mc_conversations",
-      label:      "Open Conversations",
-      value:      String(openConvCount),
-      rawValue:   openConvCount,
-      delta:      signed(convDelta),
+      id: "mc_conversations",
+      label: "Open Conversations",
+      value: String(openConvCount),
+      rawValue: openConvCount,
+      delta: signed(convDelta),
       deltaValue: convDelta,
-      trend:      convDelta > 0 ? "up" : convDelta < 0 ? "down" : "flat",
-      chipColor:  "violet",
-      iconKey:    "messages-square",
-      period:     "since yesterday",
+      trend: convDelta > 0 ? "up" : convDelta < 0 ? "down" : "flat",
+      chipColor: "violet",
+      iconKey: "messages-square",
+      period: "since yesterday",
     },
     {
-      id:         "mc_insights",
-      label:      "AI Insights",
-      value:      String(insightCount30d),
-      rawValue:   insightCount30d,
-      delta:      signed(insightDelta),
+      id: "mc_insights",
+      label: "AI Insights",
+      value: String(insightCount30d),
+      rawValue: insightCount30d,
+      delta: signed(insightDelta),
       deltaValue: insightDelta,
-      trend:      insightDelta > 0 ? "up" : insightDelta < 0 ? "down" : "flat",
-      chipColor:  "red",
-      iconKey:    "sparkles",
-      period:     "last 30 days",
+      trend: insightDelta > 0 ? "up" : insightDelta < 0 ? "down" : "flat",
+      chipColor: "red",
+      iconKey: "sparkles",
+      period: "last 30 days",
     },
     {
-      id:         "mc_renewal",
-      label:      "Acceptance Rate",
-      value:      `${renewalRate}%`,
-      rawValue:   renewalRate,
-      delta:      signed(renewalDelta) + "%",
+      id: "mc_renewal",
+      label: "Acceptance Rate",
+      value: `${renewalRate}%`,
+      rawValue: renewalRate,
+      delta: signed(renewalDelta) + "%",
       deltaValue: renewalDelta,
-      trend:      renewalDelta > 0 ? "up" : renewalDelta < 0 ? "down" : "flat",
-      chipColor:  "green",
-      iconKey:    "trending-up",
-      period:     "this quarter",
+      trend: renewalDelta > 0 ? "up" : renewalDelta < 0 ? "down" : "flat",
+      chipColor: "green",
+      iconKey: "trending-up",
+      period: "this quarter",
     },
     {
-      id:         "mc_team",
-      label:      "Team Members",
-      value:      String(memberCount),
-      rawValue:   memberCount,
-      delta:      memberDelta === 0 ? "0" : signed(memberDelta),
+      id: "mc_team",
+      label: "Team Members",
+      value: String(memberCount),
+      rawValue: memberCount,
+      delta: memberDelta === 0 ? "0" : signed(memberDelta),
       deltaValue: memberDelta,
-      trend:      memberDelta > 0 ? "up" : memberDelta < 0 ? "down" : "flat",
-      chipColor:  "amber",
-      iconKey:    "users",
-      period:     "in this workspace",
+      trend: memberDelta > 0 ? "up" : memberDelta < 0 ? "down" : "flat",
+      chipColor: "amber",
+      iconKey: "users",
+      period: "in this workspace",
     },
   ];
 }
 
-// ─── Alerts — derived from at-risk projects + critical unread insights ────────
+// ─── Alerts ───────────────────────────────────────────────────────────────────
 
 async function buildAlerts(orgId: string): Promise<DashboardAlert[]> {
-  const [atRiskProjects, criticalInsights] = await Promise.all([
+  const [atRiskProjectsRes, criticalInsightsRes] = await Promise.allSettled([
     prisma.project.findMany({
       where:   { organizationId: orgId, status: { in: ["AT_RISK", "BLOCKED"] } },
       orderBy: { updatedAt: "desc" },
@@ -234,6 +237,9 @@ async function buildAlerts(orgId: string): Promise<DashboardAlert[]> {
       select:  { id: true, title: true, body: true, accountName: true },
     }),
   ]);
+
+  const atRiskProjects = atRiskProjectsRes.status === "fulfilled" ? atRiskProjectsRes.value : [];
+  const criticalInsights = criticalInsightsRes.status === "fulfilled" ? criticalInsightsRes.value : [];
 
   const alerts: DashboardAlert[] = [];
 
@@ -273,58 +279,58 @@ async function buildAlerts(orgId: string): Promise<DashboardAlert[]> {
 // ─── Recent conversations ─────────────────────────────────────────────────────
 
 async function buildRecentConversations(orgId: string): Promise<RecentConversation[]> {
-  const rows = await prisma.conversation.findMany({
-    where:   { organizationId: orgId },
-    orderBy: { updatedAt: "desc" },
-    take:    5,
-    select: {
-      id:           true,
-      topic:        true,
-      contextLabel: true,
-      rfLead:       true,
-      unread:       true,
-      updatedAt:    true,
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take:    1,
-        select:  {
-          content:   true,
-          createdAt: true,
-          sender: { select: { name: true, avatarInitials: true } },
+  try {
+    const rows = await prisma.conversation.findMany({
+      where:   { organizationId: orgId },
+      orderBy: { updatedAt: "desc" },
+      take:    5,
+      select: {
+        id:           true,
+        topic:        true,
+        contextLabel: true,
+        rfLead:       true,
+        unread:       true,
+        updatedAt:    true,
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take:    1,
+          select:  {
+            content:   true,
+            createdAt: true,
+            sender: { select: { name: true, avatarInitials: true } },
+          },
         },
       },
-    },
-  });
+    });
 
-  return rows.map((row) => {
-    const lastMsg    = row.messages[0] ?? null;
-    const senderName = lastMsg?.sender.name ?? row.rfLead;
-    const initials   = lastMsg?.sender.avatarInitials
-      ?? row.rfLead
-           .split(" ")
-           .map((w) => w[0])
-           .join("")
-           .toUpperCase()
-           .slice(0, 2);
+    return rows.map((row) => {
+      const lastMsg    = row.messages[0] ?? null;
+      const senderName = lastMsg?.sender.name ?? row.rfLead;
+      const initials   = lastMsg?.sender.avatarInitials
+        ?? row.rfLead
+             .split(" ")
+             .map((w) => w[0])
+             .join("")
+             .toUpperCase()
+             .slice(0, 2);
 
-    return {
-      id:           row.id,
-      senderName,
-      senderInitials: initials,
-      preview:      lastMsg?.content ?? row.topic,
-      relativeTime: relativeTime(lastMsg?.createdAt ?? row.updatedAt),
-      updatedAt:    row.updatedAt.toISOString(),
-      unread:       row.unread,
-      contextLabel: row.contextLabel,
-    };
-  });
+      return {
+        id:           row.id,
+        senderName,
+        senderInitials: initials,
+        preview:      lastMsg?.content ?? row.topic,
+        relativeTime: relativeTime(lastMsg?.createdAt ?? row.updatedAt),
+        updatedAt:    row.updatedAt.toISOString(),
+        unread:       row.unread,
+        contextLabel: row.contextLabel,
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
-// ─── Projects (top 5, re-uses same select as /api/projects) ──────────────────
-
-import { PROJECT_SELECT, serializeProject, type ProjectRow } from "@/app/api/projects/route";
-
-// ─── Insights (top 5, re-uses same select as /api/insights) ──────────────────
+// ─── Insights (top 5) ─────────────────────────────────────────────────────────
 
 const INSIGHT_SELECT = {
   id: true,
@@ -387,57 +393,88 @@ function serializeInsight(r: RawInsight): Insight {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(): Promise<Response> {
-  const session = await getSession();
-  if (!session) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withTiming("GET /api/dashboard", async () => {
+    const session = await getSession();
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const orgId = session.organizationId;
-  const now   = new Date();
+    const orgId = session.organizationId;
+    const now   = new Date();
 
-  // All queries run in parallel — single DB round-trip fan-out
-  const [
-    user,
-    metricCards,
-    rawProjects,
-    rawInsights,
-    unreadInsightCount,
-    alerts,
-    recentConversations,
-  ] = await Promise.all([
-    prisma.user.findUnique({
-      where:  { id: session.userId },
-      select: { name: true },
-    }),
-    buildMetricCards(orgId, now),
-    prisma.project.findMany({
-      where:   { organizationId: orgId },
-      orderBy: { updatedAt: "desc" },
-      take:    5,
-      select:  PROJECT_SELECT,
-    }),
-    prisma.insight.findMany({
-      where:   { organizationId: orgId },
-      orderBy: { createdAt: "desc" },
-      take:    5,
-      select:  INSIGHT_SELECT,
-    }),
-    prisma.insight.count({
-      where: { organizationId: orgId, read: false },
-    }),
-    buildAlerts(orgId),
-    buildRecentConversations(orgId),
-  ]);
+    // Check organization dashboard cache
+    const cached = dashboardCache.get(orgId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return Response.json(cached.data);
+    }
 
-  const payload: DashboardData = {
-    userName:           user?.name ?? "there",
-    metricCards,
-    projects:           rawProjects.map((p) => serializeProject(p as ProjectRow)),
-    insights:           rawInsights.map((r) => serializeInsight(r as RawInsight)),
-    unreadInsightCount,
-    alerts,
-    recentConversations,
-  };
+    // Run all sections with Promise.allSettled
+    const [
+      userRes,
+      metricCardsRes,
+      projectsRes,
+      insightsRes,
+      unreadInsightRes,
+      alertsRes,
+      conversationsRes,
+    ] = await Promise.allSettled([
+      prisma.user.findUnique({
+        where:  { id: session.userId },
+        select: { name: true },
+      }),
+      buildMetricCards(orgId, now),
+      prisma.project.findMany({
+        where:   { organizationId: orgId },
+        orderBy: { updatedAt: "desc" },
+        take:    5,
+        select:  PROJECT_SELECT,
+      }),
+      prisma.insight.findMany({
+        where:   { organizationId: orgId },
+        orderBy: { createdAt: "desc" },
+        take:    5,
+        select:  INSIGHT_SELECT,
+      }),
+      prisma.insight.count({
+        where: { organizationId: orgId, read: false },
+      }),
+      buildAlerts(orgId),
+      buildRecentConversations(orgId),
+    ]);
 
-  return Response.json(payload);
+    const errors: Record<string, boolean> = {
+      projects: projectsRes.status === "rejected",
+      insights: insightsRes.status === "rejected",
+      metrics: metricCardsRes.status === "rejected",
+      alerts: alertsRes.status === "rejected",
+      conversations: conversationsRes.status === "rejected",
+    };
+
+    const user = userRes.status === "fulfilled" ? userRes.value : null;
+    const metricCards = metricCardsRes.status === "fulfilled" ? metricCardsRes.value : [];
+    const rawProjects = projectsRes.status === "fulfilled" ? projectsRes.value : [];
+    const rawInsights = insightsRes.status === "fulfilled" ? insightsRes.value : [];
+    const unreadInsightCount = unreadInsightRes.status === "fulfilled" ? unreadInsightRes.value : 0;
+    const alerts = alertsRes.status === "fulfilled" ? alertsRes.value : [];
+    const recentConversations = conversationsRes.status === "fulfilled" ? conversationsRes.value : [];
+
+    const payload: DashboardData & { errors?: Record<string, boolean> } = {
+      userName:           user?.name ?? session.name ?? "there",
+      metricCards,
+      projects:           rawProjects.map((p) => serializeProject(p as ProjectRow)),
+      insights:           rawInsights.map((r) => serializeInsight(r as RawInsight)),
+      unreadInsightCount,
+      alerts,
+      recentConversations,
+      errors,
+    };
+
+    // Cache successful parts
+    dashboardCache.set(orgId, {
+      data: payload as DashboardData,
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+    });
+
+    return Response.json(payload);
+  });
 }

@@ -158,6 +158,9 @@ export async function POST(request: Request): Promise<Response> {
     select: PROJECT_SELECT,
   });
 
+  const { notifyOrgDataChanged } = await import("@/app/lib/data-sync");
+  await notifyOrgDataChanged(session.organizationId, ["projects", "alerts"]);
+
   return Response.json({ project: serializeProject(project) }, { status: 201 });
 }
 

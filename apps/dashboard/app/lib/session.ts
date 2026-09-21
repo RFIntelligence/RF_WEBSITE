@@ -18,6 +18,22 @@ interface TokenPayload {
   iat: number;
 }
 
+// In-memory LRU cache for verified sessions: userId -> { session, expiresAt }
+interface CachedSession {
+  session: Session;
+  expiresAt: number;
+}
+const sessionCache = new Map<string, CachedSession>();
+const SESSION_CACHE_TTL_MS = 45_000; // 45 seconds LRU cache
+
+export function invalidateSessionCache(userId: string) {
+  sessionCache.delete(userId);
+}
+
+export function clearAllSessionCache() {
+  sessionCache.clear();
+}
+
 function getSecret(): string {
   const secret = process.env.AUTH_SECRET;
   if (!secret) {
@@ -69,8 +85,8 @@ export function verifySessionToken(
 }
 
 /**
- * Resolves the current session from the signed, httpOnly cookie. The caller's
- * `organizationId` is derived from the user row — never from the request.
+ * Resolves the current session from the signed, httpOnly cookie.
+ * Validates the cookie first, checks in-memory LRU cache (30-60s), and hits DB only when needed.
  */
 export async function getSession(): Promise<Session | null> {
   const store = await cookies();
@@ -79,6 +95,12 @@ export async function getSession(): Promise<Session | null> {
 
   const verified = verifySessionToken(token);
   if (!verified) return null;
+
+  // Check LRU cache
+  const cached = sessionCache.get(verified.uid);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.session;
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: verified.uid },
@@ -92,13 +114,21 @@ export async function getSession(): Promise<Session | null> {
   });
   if (!user) return null;
 
-  return {
+  const session: Session = {
     userId: user.id,
     organizationId: user.organizationId,
     name: user.name,
     email: user.email,
     role: user.role,
   };
+
+  // Cache session
+  sessionCache.set(verified.uid, {
+    session,
+    expiresAt: Date.now() + SESSION_CACHE_TTL_MS,
+  });
+
+  return session;
 }
 
 export async function setSessionCookie(userId: string): Promise<void> {
@@ -114,5 +144,12 @@ export async function setSessionCookie(userId: string): Promise<void> {
 
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (token) {
+    const verified = verifySessionToken(token);
+    if (verified) {
+      invalidateSessionCache(verified.uid);
+    }
+  }
   store.delete(SESSION_COOKIE);
 }

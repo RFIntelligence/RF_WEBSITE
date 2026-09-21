@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { Search, Bell, ChevronDown, Check, Building2, LogOut, Settings, User } from "lucide-react";
+import { Search, Bell, ChevronDown, Building2, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Input } from "@/app/components/ui/input";
 import { Avatar, AvatarFallback } from "@/app/components/ui/avatar";
@@ -14,18 +14,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
 } from "@/app/components/ui/dropdown-menu";
-import {
-  MOCK_USER,
-  MOCK_ORGS,
-} from "@/app/lib/mock-data";
 import { formatRelativeTime } from "@/app/lib/format";
 import {
   useOrgRealtime,
   type RealtimeEvent,
 } from "@/app/lib/realtime/use-org-realtime";
+import { useSession } from "@/app/providers/session-provider";
 
 // ─── Page title map ───────────────────────────────────────────────────────────
 
@@ -50,41 +45,9 @@ function usePageTitle() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-interface SessionResponse {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-  };
-  organization: {
-    id: string;
-    name: string;
-    plan: string;
-  } | null;
-}
-
 function OrgIndicator() {
-  const [org, setOrg] = React.useState<{ name: string; plan: string } | null>(null);
-
-  React.useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const res = await fetch("/api/auth/session");
-        if (!res.ok) return;
-        const data = (await res.json()) as SessionResponse;
-        if (active && data.organization) {
-          setOrg({ name: data.organization.name, plan: data.organization.plan });
-        }
-      } catch {
-        // non-fatal
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { session } = useSession();
+  const org = session?.organization;
 
   return (
     <div className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--text-secondary)] select-none">
@@ -108,15 +71,15 @@ interface ApiNotification {
 }
 
 function NotificationBell() {
-  const [notifications, setNotifications] = React.useState<ApiNotification[]>(
-    [],
-  );
+  const { session } = useSession();
+  const orgId = session?.organization?.id ?? null;
+
+  const [notifications, setNotifications] = React.useState<ApiNotification[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
-  const [orgId, setOrgId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications");
+      const res = await fetch("/api/notifications?limit=20");
       if (!res.ok) return;
       const data = (await res.json()) as {
         notifications: ApiNotification[];
@@ -130,28 +93,10 @@ function NotificationBell() {
   }, []);
 
   React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/auth/session");
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          organization: { id: string } | null;
-        };
-        if (!cancelled) setOrgId(data.organization?.id ?? null);
-      } catch {
-        // Realtime is optional; polling remains available.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (session) {
+      void load();
+    }
+  }, [session, load]);
 
   const handleRealtime = React.useCallback(
     (event: RealtimeEvent) => {
@@ -162,13 +107,36 @@ function NotificationBell() {
 
   const { live } = useOrgRealtime(orgId, "notifications", handleRealtime);
 
+  // If realtime is connected, do NOT poll.
+  // Otherwise poll only while document is visible, with jitter.
   React.useEffect(() => {
-    if (live) return;
-    const interval = setInterval(() => {
-      void load();
-    }, 20000);
-    return () => clearInterval(interval);
-  }, [live, load]);
+    if (live || !session) return;
+
+    let timer: NodeJS.Timeout;
+    const schedulePoll = () => {
+      const jitter = Math.floor(Math.random() * 5000);
+      timer = setTimeout(() => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          void load();
+        }
+        schedulePoll();
+      }, 30000 + jitter);
+    };
+
+    schedulePoll();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [live, session, load]);
 
   const markAllRead = React.useCallback(async () => {
     setUnreadCount(0);
@@ -259,6 +227,31 @@ function NotificationBell() {
 }
 
 function UserMenu() {
+  const { session } = useSession();
+  const user = session?.user;
+
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "U";
+
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    } catch {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -269,11 +262,11 @@ function UserMenu() {
         >
           <Avatar className="h-7 w-7">
             <AvatarFallback className="text-[10px]">
-              {MOCK_USER.avatarInitials}
+              {initials}
             </AvatarFallback>
           </Avatar>
           <span className="hidden md:block text-xs font-medium text-[var(--text-primary)] max-w-[120px] truncate">
-            {MOCK_USER.name}
+            {user?.name ?? "User"}
           </span>
           <ChevronDown aria-hidden className="hidden md:block size-3 text-[var(--text-muted)]" />
         </button>
@@ -282,10 +275,10 @@ function UserMenu() {
       <DropdownMenuContent align="end" className="w-52">
         <div className="px-2 py-2">
           <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-            {MOCK_USER.name}
+            {user?.name ?? "User"}
           </p>
           <p className="text-xs text-[var(--text-muted)] truncate">
-            {MOCK_USER.email}
+            {user?.email ?? ""}
           </p>
         </div>
         <DropdownMenuSeparator />
@@ -296,7 +289,10 @@ function UserMenu() {
           <Settings aria-hidden className="size-4" /> Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-2 text-[var(--dash-status-error)] focus:text-[var(--dash-status-error)]">
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          className="gap-2 text-[var(--dash-status-error)] focus:text-[var(--dash-status-error)] cursor-pointer"
+        >
           <LogOut aria-hidden className="size-4" /> Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -329,7 +325,6 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
         position: "sticky",
         top: 0,
         zIndex: 30,
-        // Offset for sidebar — matches sidebar width transition
         marginLeft: sidebarCollapsed
           ? "var(--dash-sidebar-collapsed)"
           : "var(--dash-sidebar-width)",

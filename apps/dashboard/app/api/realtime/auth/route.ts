@@ -30,41 +30,45 @@ function channelFrom(
  * organization resolved from the signed session. A subscriber can therefore
  * only ever be granted access to their own organization's channel.
  */
+import { withTiming } from "@/app/lib/timing";
+
 async function authorize(
   request: Request,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return json({ error: "Unauthorized" }, 401);
+  return withTiming("REALTIME AUTH /api/realtime/auth", async () => {
+    const session = await getSession();
+    if (!session) return json({ error: "Unauthorized" }, 401);
 
-  const channel = channelFrom(request, body);
-  if (!channel) return json({ error: "A channel name is required" }, 400);
+    const channel = channelFrom(request, body);
+    if (!channel) return json({ error: "A channel name is required" }, 400);
 
-  const channelOrganizationId = parseOrganizationFromChannel(channel);
-  if (!channelOrganizationId) return json({ error: "Unknown channel" }, 400);
+    const channelOrganizationId = parseOrganizationFromChannel(channel);
+    if (!channelOrganizationId) return json({ error: "Unknown channel" }, 400);
 
-  if (channelOrganizationId !== session.organizationId) {
-    return json({ error: "Forbidden" }, 403);
-  }
+    if (channelOrganizationId !== session.organizationId) {
+      return json({ error: "Forbidden" }, 403);
+    }
 
-  if (!isRealtimeConfigured()) {
-    return json(
-      { error: "Realtime is not configured", configured: false },
-      503,
-    );
-  }
+    if (!isRealtimeConfigured()) {
+      return json(
+        { error: "Realtime is not configured", configured: false },
+        503,
+      );
+    }
 
-  try {
-    const tokenRequest = await createChannelTokenRequest(
-      channel,
-      session.userId,
-    );
-    // Ably's auth URL expects a bare TokenRequest/TokenDetails document.
-    return Response.json(tokenRequest);
-  } catch (error) {
-    console.error("realtime: failed to authorize channel", error);
-    return json({ error: "Could not authorize channel" }, 500);
-  }
+    try {
+      const tokenRequest = await createChannelTokenRequest(
+        channel,
+        session.userId,
+      );
+      // Ably's auth URL expects a bare TokenRequest/TokenDetails document.
+      return Response.json(tokenRequest);
+    } catch (error) {
+      console.error("realtime: failed to authorize channel", error);
+      return json({ error: "Could not authorize channel" }, 500);
+    }
+  });
 }
 
 export async function GET(request: Request): Promise<Response> {

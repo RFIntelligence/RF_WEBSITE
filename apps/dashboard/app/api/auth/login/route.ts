@@ -14,44 +14,48 @@ export const dynamic = "force-dynamic";
  *   2. Otherwise fall back to the demo shared password (`AUTH_DEMO_PASSWORD`,
  *      default "password") so seed/demo users can still log in.
  */
+import { withTiming } from "@/app/lib/timing";
+
 export async function POST(request: Request): Promise<Response> {
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  return withTiming("POST /api/auth/login", async () => {
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
-  const body = (payload ?? {}) as { email?: unknown; password?: unknown };
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  const password = typeof body.password === "string" ? body.password : "";
+    const body = (payload ?? {}) as { email?: unknown; password?: unknown };
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
-  if (!email || !password) {
-    return Response.json(
-      { error: "Email and password are required" },
-      { status: 400 },
-    );
-  }
+    if (!email || !password) {
+      return Response.json(
+        { error: "Email and password are required" },
+        { status: 400 },
+      );
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, passwordHash: true },
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, passwordHash: true },
+    });
+
+    // Always run both checks to avoid timing-based user enumeration.
+    const demoPassword = process.env.AUTH_DEMO_PASSWORD ?? "password";
+    const incomingHash = createHash("sha256").update(password).digest("hex");
+
+    const validViaHash =
+      user?.passwordHash != null && user.passwordHash === incomingHash;
+    const validViaDemo =
+      (user?.passwordHash == null) && password === demoPassword;
+
+    if (!user || (!validViaHash && !validViaDemo)) {
+      return Response.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    await setSessionCookie(user.id);
+
+    return Response.json({ ok: true });
   });
-
-  // Always run both checks to avoid timing-based user enumeration.
-  const demoPassword = process.env.AUTH_DEMO_PASSWORD ?? "password";
-  const incomingHash = createHash("sha256").update(password).digest("hex");
-
-  const validViaHash =
-    user?.passwordHash != null && user.passwordHash === incomingHash;
-  const validViaDemo =
-    (user?.passwordHash == null) && password === demoPassword;
-
-  if (!user || (!validViaHash && !validViaDemo)) {
-    return Response.json({ error: "Invalid email or password" }, { status: 401 });
-  }
-
-  await setSessionCookie(user.id);
-
-  return Response.json({ ok: true });
 }
