@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useSyncExternalStore, useMemo, useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,8 +12,6 @@ import {
   Edit2,
   Check,
   X,
-  MessageSquare,
-  Sparkles,
 } from "lucide-react";
 import { chatStore, type ChatSession } from "@/app/lib/chat-store";
 import { cn } from "@/app/lib/utils";
@@ -47,44 +45,19 @@ export function ChatHistorySidebar({
   onCloseMobileDrawer,
 }: ChatHistorySidebarProps) {
   const router = useRouter();
-  const [chats, setChats] = useState<ChatSession[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Read directly from external store via useSyncExternalStore
+  const chats = useSyncExternalStore(
+    chatStore.subscribe,
+    () => chatStore.getSnapshot(organizationId, userId),
+    () => chatStore.getServerSnapshot()
+  );
+
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-
-  const loadChats = React.useCallback(() => {
-    // We read safely even if orgId or userId is empty string
-    const list = chatStore.list(organizationId, userId);
-    setChats(list);
-    setLoading(false);
-  }, [organizationId, userId]);
-
-  useEffect(() => {
-    loadChats();
-  }, [loadChats]);
-
-  // Subscribe to storage and custom window events
-  useEffect(() => {
-    const handleUpdate = () => loadChats();
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key?.startsWith("rf_ask_chats_v1")) {
-        loadChats();
-      }
-    };
-
-    window.addEventListener("rf:chat-updated", handleUpdate);
-    window.addEventListener("rf:chat-deleted", handleUpdate);
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.removeEventListener("rf:chat-updated", handleUpdate);
-      window.removeEventListener("rf:chat-deleted", handleUpdate);
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [loadChats]);
 
   // Focus inline edit input
   useEffect(() => {
@@ -99,7 +72,9 @@ export function ChatHistorySidebar({
       onNewChat();
     } else {
       router.push("/ask-rf");
-      window.dispatchEvent(new CustomEvent("rf:new-chat"));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("rf:new-chat"));
+      }
     }
     if (onCloseMobileDrawer) onCloseMobileDrawer();
   };
@@ -108,20 +83,17 @@ export function ChatHistorySidebar({
     const trimmed = editTitle.trim();
     if (trimmed) {
       chatStore.rename(organizationId, userId, chatId, trimmed);
-      loadChats();
     }
     setEditingId(null);
   };
 
   const handleTogglePin = (chatId: string) => {
     chatStore.togglePin(organizationId, userId, chatId);
-    loadChats();
   };
 
   const handleDelete = (chatId: string) => {
     chatStore.delete(organizationId, userId, chatId);
     setDeleteConfirmId(null);
-    loadChats();
     if (activeChatId === chatId) {
       router.push("/ask-rf");
     }
@@ -134,9 +106,14 @@ export function ChatHistorySidebar({
     return chats.filter((c) => c.title.toLowerCase().includes(q));
   }, [chats, searchQuery]);
 
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    setNow(Date.now());
+  }, [chats]);
+
   // Grouping: Pinned, Today, Yesterday, Previous 7 days, Older
   const groups = useMemo(() => {
-    const now = Date.now();
+    const currentTime = now || (typeof window !== "undefined" ? 1726941600000 : 0);
     const dayMs = 86_400_000;
 
     const pinned: ChatSession[] = [];
@@ -150,7 +127,7 @@ export function ChatHistorySidebar({
         pinned.push(chat);
         continue;
       }
-      const diff = now - chat.updatedAt;
+      const diff = currentTime - chat.updatedAt;
       if (diff < dayMs) {
         today.push(chat);
       } else if (diff < 2 * dayMs) {
@@ -217,16 +194,7 @@ export function ChatHistorySidebar({
 
       {/* ── Conversation List grouped by date ── */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
-        {loading ? (
-          <div className="space-y-2 px-1 py-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className="h-8 rounded-lg bg-white/[0.03] animate-pulse"
-              />
-            ))}
-          </div>
-        ) : filteredChats.length === 0 ? (
+        {filteredChats.length === 0 ? (
           <div className="px-3 py-8 text-center">
             <p className="text-xs text-white/40 italic">
               {searchQuery ? "No matching conversations." : "No conversations yet."}

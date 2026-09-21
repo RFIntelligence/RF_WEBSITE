@@ -53,7 +53,62 @@ export function generateTitleFromPrompt(text: string): string {
   return title || "New conversation";
 }
 
+// In-memory cache for referentially stable getSnapshot
+const memoryCache: Record<string, ChatSession[]> = {};
+let pendingMicrotask = false;
+const listeners = new Set<() => void>();
+
+function notifyListeners() {
+  listeners.forEach((l) => {
+    try {
+      l();
+    } catch (e) {
+      console.error("chatStore listener error:", e);
+    }
+  });
+}
+
+function scheduleDeferredEmit(detail: { chatId?: string; organizationId: string; userId: string; event: string }) {
+  if (!pendingMicrotask) {
+    pendingMicrotask = true;
+    queueMicrotask(() => {
+      pendingMicrotask = false;
+      notifyListeners();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(detail.event, {
+            detail,
+          })
+        );
+      }
+    });
+  }
+}
+
 export const chatStore = {
+  subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+
+  /**
+   * Snapshot function for useSyncExternalStore.
+   * Returns a referentially stable cached array that only changes when storage changes.
+   */
+  getSnapshot(organizationId: string, userId: string): ChatSession[] {
+    const key = getChatStorageKey(organizationId, userId);
+    if (key in memoryCache) {
+      return memoryCache[key];
+    }
+    const fresh = this.list(organizationId, userId);
+    memoryCache[key] = fresh;
+    return fresh;
+  },
+
+  getServerSnapshot(): ChatSession[] {
+    return [];
+  },
+
   /**
    * List all chats for a given organization and user, sorted:
    * pinned first, then by updatedAt descending.
@@ -88,7 +143,7 @@ export const chatStore = {
 
   /**
    * Create or save a chat session.
-   * Dispatches 'rf:chat-updated' event.
+   * Dispatches deferred and deduplicated 'rf:chat-updated' event.
    */
   save(chat: ChatSession): boolean {
     if (typeof window === "undefined" || !chat || !chat.id) return false;
@@ -104,19 +159,27 @@ export const chatStore = {
         updated = [chat, ...current];
       }
       window.localStorage.setItem(key, JSON.stringify(updated));
-      window.dispatchEvent(
-        new CustomEvent("rf:chat-updated", {
-          detail: { chatId: chat.id, organizationId: chat.organizationId, userId: chat.userId },
-        })
-      );
+      memoryCache[key] = updated.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+      });
+      scheduleDeferredEmit({
+        chatId: chat.id,
+        organizationId: chat.organizationId,
+        userId: chat.userId,
+        event: "rf:chat-updated",
+      });
       return true;
     } catch (e) {
       console.warn("Failed to save chat to storage:", e);
-      window.dispatchEvent(
-        new CustomEvent("rf:storage-error", {
-          detail: { message: "Failed to persist chat to storage (quota exceeded or storage blocked)." },
-        })
-      );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("rf:storage-error", {
+            detail: { message: "Failed to persist chat to storage (quota exceeded or storage blocked)." },
+          })
+        );
+      }
       return false;
     }
   },
@@ -146,7 +209,7 @@ export const chatStore = {
 
   /**
    * Delete a chat.
-   * Dispatches 'rf:chat-deleted' event.
+   * Dispatches deferred 'rf:chat-deleted' event.
    */
   delete(organizationId: string, userId: string, chatId: string): void {
     if (typeof window === "undefined" || !chatId) return;
@@ -155,11 +218,13 @@ export const chatStore = {
       const current = this.list(organizationId, userId);
       const filtered = current.filter((c) => c.id !== chatId);
       window.localStorage.setItem(key, JSON.stringify(filtered));
-      window.dispatchEvent(
-        new CustomEvent("rf:chat-deleted", {
-          detail: { chatId, organizationId, userId },
-        })
-      );
+      memoryCache[key] = filtered;
+      scheduleDeferredEmit({
+        chatId,
+        organizationId,
+        userId,
+        event: "rf:chat-deleted",
+      });
     } catch (e) {
       console.warn("Failed to delete chat from storage:", e);
     }

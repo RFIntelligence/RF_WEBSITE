@@ -75,22 +75,30 @@ export function useAskRf() {
     };
   }, [router]);
 
-  // 2. Load conversation from store when activeChatId changes or session loads
+  // 2. Load conversation from store only when chatId param changes and differs from activeChatId
   useEffect(() => {
     const currentOrgId = session?.organization?.id || "default_org";
     const currentUserId = session?.user?.id || "default_user";
 
     if (chatId) {
-      setActiveChatId(chatId);
-      const existing = chatStore.get(currentOrgId, currentUserId, chatId);
-      if (existing) {
-        setMessages(existing.messages);
-      } else {
-        setMessages([]);
+      if (chatId !== activeChatIdRef.current) {
+        queueMicrotask(() => {
+          setActiveChatId(chatId);
+          activeChatIdRef.current = chatId;
+          const existing = chatStore.get(currentOrgId, currentUserId, chatId);
+          if (existing) {
+            setMessages(existing.messages);
+          } else {
+            setMessages([]);
+          }
+        });
       }
-    } else {
-      setActiveChatId(null);
-      setMessages([]);
+    } else if (activeChatIdRef.current !== null) {
+      queueMicrotask(() => {
+        setActiveChatId(null);
+        activeChatIdRef.current = null;
+        setMessages([]);
+      });
     }
   }, [chatId, session?.organization?.id, session?.user?.id]);
 
@@ -99,14 +107,17 @@ export function useAskRf() {
     function onDeleted(e: Event) {
       const deletedId = (e as CustomEvent<{ chatId: string }>).detail?.chatId;
       if (deletedId === activeChatIdRef.current) {
-        router.push("/ask-rf");
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", "/ask-rf");
+        }
         setActiveChatId(null);
+        activeChatIdRef.current = null;
         setMessages([]);
       }
     }
     window.addEventListener("rf:chat-deleted", onDeleted);
     return () => window.removeEventListener("rf:chat-deleted", onDeleted);
-  }, [router]);
+  }, []);
 
   // 4. Submit handler preserving EXACT payload and response contract
   const handleSend = useCallback(
@@ -123,6 +134,7 @@ export function useAskRf() {
 
       const updatedMessages = [...messagesRef.current, userMsg];
       setMessages(updatedMessages);
+      messagesRef.current = updatedMessages;
       if (textToSend === undefined) setInput("");
       setIsTyping(true);
 
@@ -146,8 +158,11 @@ export function useAskRf() {
           messages: updatedMessages,
         };
         chatStore.save(newSession);
-        // Replace URL without full reload
-        router.replace(`/ask-rf?chat=${currentSessionId}`);
+        
+        // Update URL with window.history.replaceState (no Next.js navigation, no remount, no auto-refresh)
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", `/ask-rf?chat=${currentSessionId}`);
+        }
       } else {
         const existing = chatStore.get(curOrgId, curUserId, currentSessionId);
         if (existing) {
@@ -155,7 +170,6 @@ export function useAskRf() {
           existing.updatedAt = Date.now();
           chatStore.save(existing);
         } else {
-          // If session id was in URL but not in store yet
           const fallbackSession: ChatSession = {
             id: currentSessionId,
             title: generateTitleFromPrompt(query),
@@ -211,19 +225,19 @@ export function useAskRf() {
           };
         }
 
-        setMessages((prev) => {
-          const finalMessages = [...prev, assistantMsg];
-          const curSessId = activeChatIdRef.current;
-          if (curSessId) {
-            const existing = chatStore.get(curOrgId, curUserId, curSessId);
-            if (existing) {
-              existing.messages = finalMessages;
-              existing.updatedAt = Date.now();
-              chatStore.save(existing);
-            }
+        const finalMessages = [...messagesRef.current, assistantMsg];
+        setMessages(finalMessages);
+        messagesRef.current = finalMessages;
+
+        const curSessId = activeChatIdRef.current;
+        if (curSessId) {
+          const existing = chatStore.get(curOrgId, curUserId, curSessId);
+          if (existing) {
+            existing.messages = finalMessages;
+            existing.updatedAt = Date.now();
+            chatStore.save(existing);
           }
-          return finalMessages;
-        });
+        }
       } catch (err: unknown) {
         if ((err as Error)?.name === "AbortError") {
           return;
@@ -235,19 +249,20 @@ export function useAskRf() {
           timestamp: nowLabel(),
           error: true,
         };
-        setMessages((prev) => {
-          const finalMessages = [...prev, errorMsg];
-          const curSessId = activeChatIdRef.current;
-          if (curSessId) {
-            const existing = chatStore.get(curOrgId, curUserId, curSessId);
-            if (existing) {
-              existing.messages = finalMessages;
-              existing.updatedAt = Date.now();
-              chatStore.save(existing);
-            }
+
+        const finalMessages = [...messagesRef.current, errorMsg];
+        setMessages(finalMessages);
+        messagesRef.current = finalMessages;
+
+        const curSessId = activeChatIdRef.current;
+        if (curSessId) {
+          const existing = chatStore.get(curOrgId, curUserId, curSessId);
+          if (existing) {
+            existing.messages = finalMessages;
+            existing.updatedAt = Date.now();
+            chatStore.save(existing);
           }
-          return finalMessages;
-        });
+        }
       } finally {
         setIsTyping(false);
         abortControllerRef.current = null;
@@ -271,9 +286,12 @@ export function useAskRf() {
     setActiveChatId(null);
     activeChatIdRef.current = null;
     setMessages([]);
+    messagesRef.current = [];
     setInput("");
-    router.push("/ask-rf");
-  }, [handleStop, router]);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/ask-rf");
+    }
+  }, [handleStop]);
 
   // 7. Regenerate assistant response
   const handleRegenerate = useCallback(() => {
@@ -286,12 +304,9 @@ export function useAskRf() {
       }
     }
     if (lastQuery) {
-      setMessages((prev) => {
-        if (prev.length > 0 && prev[prev.length - 1].sender === "rf") {
-          return prev.slice(0, -1);
-        }
-        return prev;
-      });
+      const truncated = messagesRef.current.slice(0, -1);
+      setMessages(truncated);
+      messagesRef.current = truncated;
       void handleSend(lastQuery);
     }
   }, [isTyping, handleSend]);
@@ -303,6 +318,7 @@ export function useAskRf() {
       if (idx < 0) return;
       const truncated = messagesRef.current.slice(0, idx);
       setMessages(truncated);
+      messagesRef.current = truncated;
       void handleSend(newText);
     },
     [handleSend]
