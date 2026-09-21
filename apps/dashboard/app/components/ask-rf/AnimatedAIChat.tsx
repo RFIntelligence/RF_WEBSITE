@@ -28,6 +28,8 @@ import {
   Lock,
   Plus,
   AlertCircle,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -142,6 +144,8 @@ export function AnimatedAIChat({
 }: AnimatedAIChatProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, "up" | "down">>({});
+  const [attachments, setAttachments] = useState<Array<{ name: string; size: number }>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +159,31 @@ export function AnimatedAIChat({
     "Which accounts are at risk?",
     "Summarize recent project activity",
   ];
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return;
+    const newFiles = Array.from(files).slice(0, 4 - attachments.length);
+    const added = newFiles.map((f) => ({ name: f.name, size: f.size }));
+    setAttachments((prev) => [...prev, ...added].slice(0, 4));
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      e.preventDefault();
+      handleFileSelect(e.clipboardData.files);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelect(e.dataTransfer.files);
+    }
+  };
 
   // Auto-scroll to bottom on new messages or typing state
   useEffect(() => {
@@ -447,7 +476,41 @@ export function AnimatedAIChat({
               </div>
 
               {/* Minimal Glass Composer */}
-              <div className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.06] shadow-2xl mt-4">
+              <div
+                onPaste={handlePaste}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.06] shadow-2xl mt-4"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                />
+
+                {/* Attachment chips */}
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+                    {attachments.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/[0.06] border border-white/10 text-[11px] text-white/80"
+                      >
+                        <span className="max-w-[120px] truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(idx)}
+                          className="text-white/40 hover:text-white"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="p-3">
                   <textarea
                     ref={textareaRef}
@@ -463,7 +526,16 @@ export function AnimatedAIChat({
                   />
                 </div>
 
-                <div className="px-3 pb-3 flex items-center justify-end">
+                <div className="px-3 pb-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                    className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -535,7 +607,41 @@ export function AnimatedAIChat({
         {/* ── Bottom Anchored Composer (When conversation has messages) ── */}
         {hasMessages && (
           <div className="shrink-0 pb-4 pt-2">
-            <div className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.05] shadow-2xl">
+            <div
+              onPaste={handlePaste}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.05] shadow-2xl"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileSelect(e.target.files)}
+              />
+
+              {/* Attachment chips */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+                  {attachments.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/[0.06] border border-white/10 text-[11px] text-white/80"
+                    >
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="text-white/40 hover:text-white"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="p-3">
                 <textarea
                   ref={textareaRef}
@@ -551,7 +657,16 @@ export function AnimatedAIChat({
                 />
               </div>
 
-              <div className="px-3 pb-3 flex items-center justify-end">
+              <div className="px-3 pb-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach files"
+                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
