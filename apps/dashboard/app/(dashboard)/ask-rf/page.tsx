@@ -64,9 +64,9 @@ function AskRFPageContent() {
 
   return (
     <div className="flex flex-col h-[calc(100dvh-48px)] w-full overflow-hidden bg-[#07080B]">
-      {/* ── Slim Page Header ── */}
-      <header className="h-12 shrink-0 border-b border-white/[0.06] px-4 flex items-center justify-between bg-[#090A0E]/80 backdrop-blur-md z-20">
-        <div className="flex items-center gap-3">
+      {/* ── Minimal Header: History Toggle only ── */}
+      <div className="h-10 shrink-0 px-4 flex items-center justify-between z-20">
+        <div className="flex items-center gap-2">
           {/* Mobile history toggle button */}
           <button
             type="button"
@@ -90,15 +90,6 @@ function AskRFPageContent() {
               <ChevronLeft className="w-4 h-4" />
             )}
           </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight text-white">Ask RF</span>
-            <span className="text-white/20">/</span>
-            <span className="text-xs text-white/50 font-mono flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-emerald-400" />
-              Based only on <span className="text-white/80 font-medium">{currentOrg}</span> data
-            </span>
-          </div>
         </div>
 
         {/* Non-blocking storage toast */}
@@ -107,7 +98,7 @@ function AskRFPageContent() {
             {storageError}
           </div>
         )}
-      </header>
+      </div>
 
       {/* ── Two-Pane Layout: [Chat History Panel ~260px] [Chat Area flex-1] ── */}
       <div className="flex-1 flex w-full overflow-hidden relative">

@@ -119,7 +119,7 @@ interface SuggestionPrompt {
 }
 
 interface AnimatedAIChatProps {
-  currentOrg: string;
+  currentOrg?: string;
   messages: ChatMessage[];
   input: string;
   setInput: (val: string) => void;
@@ -131,7 +131,6 @@ interface AnimatedAIChatProps {
 }
 
 export function AnimatedAIChat({
-  currentOrg,
   messages,
   input,
   setInput,
@@ -141,49 +140,21 @@ export function AnimatedAIChat({
   error,
   onRetry,
 }: AnimatedAIChatProps) {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [inputFocused, setInputFocused] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, "up" | "down">>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-    minHeight: 60,
-    maxHeight: 200,
+    minHeight: 52,
+    maxHeight: 180,
   });
 
-  const suggestions: SuggestionPrompt[] = [
-    {
-      icon: <AlertCircle className="w-3.5 h-3.5 text-red-400" />,
-      label: "Which accounts are most at risk this quarter?",
-      prompt: "Which accounts are most at risk this quarter?",
-    },
-    {
-      icon: <Sparkles className="w-3.5 h-3.5 text-rose-400" />,
-      label: "What's driving pipeline concentration in Q4?",
-      prompt: "What's driving pipeline concentration in Q4?",
-    },
-    {
-      icon: <FileBarChart className="w-3.5 h-3.5 text-red-300" />,
-      label: "Show me renewal opportunities this month",
-      prompt: "Show me renewal opportunities this month",
-    },
-    {
-      icon: <FolderKanban className="w-3.5 h-3.5 text-rose-300" />,
-      label: "Summarise the latest project activity",
-      prompt: "Summarise the latest project activity",
-    },
+  const promptChips = [
+    "List my team members",
+    "Which accounts are at risk?",
+    "Summarize recent project activity",
   ];
-
-  // Mouse move glow effect
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
 
   // Auto-scroll to bottom on new messages or typing state
   useEffect(() => {
@@ -208,7 +179,7 @@ export function AnimatedAIChat({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (input.trim() && !isTyping) {
-        onSend();
+        void onSend();
       }
     }
   };
@@ -234,29 +205,11 @@ export function AnimatedAIChat({
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-transparent text-white relative overflow-hidden">
-      {/* ── Soft Red/Rose Ambient Glows ── */}
+      {/* ── Soft Ambient Glows ── */}
       <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-rose-600/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse delay-700" />
-        <div className="absolute top-1/4 right-1/3 w-64 h-64 bg-red-500/10 rounded-full mix-blend-normal filter blur-[96px] animate-pulse delay-1000" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/10 rounded-full filter blur-[128px] pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-rose-600/10 rounded-full filter blur-[128px] pointer-events-none" />
       </div>
-
-      {/* ── Dynamic Mouse-Follow Glow when focused (recolored to red/rose) ── */}
-      {inputFocused && (
-        <motion.div
-          className="fixed w-[45rem] h-[45rem] rounded-full pointer-events-none z-0 opacity-[0.035] bg-gradient-to-r from-red-600 via-rose-600 to-red-500 blur-[110px]"
-          animate={{
-            x: mousePosition.x - 360,
-            y: mousePosition.y - 360,
-          }}
-          transition={{
-            type: "spring",
-            damping: 25,
-            stiffness: 150,
-            mass: 0.5,
-          }}
-        />
-      )}
 
       {/* ── Main Chat Column ── */}
       <div className="relative z-10 flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 overflow-hidden">
@@ -276,7 +229,7 @@ export function AnimatedAIChat({
                     key={msg.id}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.25 }}
                     className="flex justify-end w-full"
                   >
                     <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-white/[0.04] border border-white/[0.08] backdrop-blur-xl shadow-lg">
@@ -297,10 +250,10 @@ export function AnimatedAIChat({
                   key={msg.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.25 }}
                   className="flex items-start gap-3.5 w-full group"
                 >
-                  {/* RF Avatar Pill Circle */}
+                  {/* RF Avatar Pill */}
                   <div className="w-7 h-7 rounded-full bg-red-950/40 border border-red-500/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                     <span className="text-[11px] font-bold text-red-200">RF</span>
                   </div>
@@ -371,12 +324,9 @@ export function AnimatedAIChat({
                       )}
                     </div>
 
-                    {/* Sources row if present */}
+                    {/* Sources row */}
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="pt-0.5">
-                        <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1.5">
-                          Sources
-                        </p>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {msg.sources.map((src) => {
                             const href =
@@ -410,7 +360,7 @@ export function AnimatedAIChat({
                       </div>
                     )}
 
-                    {/* Action buttons (Copy, Regenerate, Thumbs, Timestamp) */}
+                    {/* Action buttons */}
                     <div className="flex items-center gap-3 text-[10px] font-mono text-white/40 pt-1">
                       <span>{msg.timestamp}</span>
                       <span>·</span>
@@ -470,50 +420,35 @@ export function AnimatedAIChat({
             <div ref={messagesEndRef} />
           </div>
         ) : (
-          /* ── Hero Screen (when no messages yet) ── */
-          <div className="flex-1 flex flex-col items-center justify-center pb-8">
+          /* ── Empty State: Heading <= 5 words, Chips above Composer ── */
+          <div className="flex-1 flex flex-col items-center justify-center pb-12">
             <motion.div
-              className="relative z-10 space-y-10 w-full"
-              initial={{ opacity: 0, y: 20 }}
+              className="relative z-10 space-y-6 w-full max-w-xl text-center"
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
+              transition={{ duration: 0.4 }}
             >
-              {/* Heading & Subtitle */}
-              <div className="text-center space-y-3">
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.5 }}
-                  className="inline-block"
-                >
-                  <h1 className="text-3xl font-medium tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white/90 via-white/80 to-white/40 pb-1">
-                    Ask RF anything about {currentOrg}
-                  </h1>
-                  <motion.div
-                    className="h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent"
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: "100%", opacity: 1 }}
-                    transition={{ delay: 0.5, duration: 0.8 }}
-                  />
-                </motion.div>
-                <motion.p
-                  className="text-sm text-white/40 font-normal"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  Answers grounded in your organization&apos;s records
-                </motion.p>
+              <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-white/90">
+                What would you like to know?
+              </h1>
+
+              {/* 3 Suggested Prompts directly above input bar */}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {promptChips.map((promptText) => (
+                  <button
+                    key={promptText}
+                    type="button"
+                    onClick={() => onSend(promptText)}
+                    className="px-3 py-1.5 rounded-full text-xs bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-red-500/40 text-white/75 hover:text-white transition-all shadow-sm"
+                  >
+                    {promptText}
+                  </button>
+                ))}
               </div>
 
-              {/* ── Glass Composer Card (Pasted Component Reproduction) ── */}
-              <motion.div
-                className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.05] shadow-2xl"
-                initial={{ scale: 0.98 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.1 }}
-              >
-                <div className="p-4">
+              {/* Minimal Glass Composer */}
+              <div className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.06] shadow-2xl mt-4">
+                <div className="p-3">
                   <textarea
                     ref={textareaRef}
                     value={input}
@@ -522,90 +457,40 @@ export function AnimatedAIChat({
                       adjustHeight();
                     }}
                     onKeyDown={handleKeyDown}
-                    onFocus={() => setInputFocused(true)}
-                    onBlur={() => setInputFocused(false)}
-                    placeholder={`Ask RF anything about ${currentOrg}...`}
-                    className={cn(
-                      "w-full px-4 py-3 resize-none bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/20 min-h-[60px]",
-                      "transition-all duration-200 ease-in-out"
-                    )}
+                    placeholder="Ask RF..."
+                    className="w-full px-3 py-2 resize-none bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/25 min-h-[52px]"
                     style={{ overflow: "hidden" }}
                   />
                 </div>
 
-                <div className="p-4 border-t border-white/[0.05] flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 text-xs text-white/30 font-mono">
-                    <Lock className="w-3 h-3 text-emerald-400" />
-                    <span>Based only on {currentOrg} data</span>
-                  </div>
-
-                  <motion.button
+                <div className="px-3 pb-3 flex items-center justify-end">
+                  <button
                     type="button"
                     onClick={() => {
-                      if (input.trim() && !isTyping) onSend();
+                      if (input.trim() && !isTyping) void onSend();
                     }}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
                     disabled={isTyping || !input.trim()}
                     className={cn(
-                      "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+                      "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
                       input.trim()
-                        ? "bg-white text-[#0A0A0B] shadow-lg shadow-white/10"
-                        : "bg-white/[0.05] text-white/40 cursor-not-allowed"
+                        ? "bg-white text-[#0A0A0B] shadow-md hover:bg-white/90"
+                        : "bg-white/[0.05] text-white/30 cursor-not-allowed"
                     )}
                   >
                     {isTyping ? (
-                      <LoaderIcon className="w-4 h-4 animate-[spin_2s_linear_infinite]" />
+                      <LoaderIcon className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <SendIcon className="w-4 h-4" />
+                      <SendIcon className="w-3.5 h-3.5" />
                     )}
                     <span>Send</span>
-                  </motion.button>
+                  </button>
                 </div>
-              </motion.div>
-
-              {/* ── Suggestion Chips (4 real prompts with Lucide icons) ── */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                {suggestions.map((suggestion, index) => (
-                  <motion.button
-                    key={suggestion.prompt}
-                    type="button"
-                    onClick={() => onSend(suggestion.prompt)}
-                    className="flex items-center gap-2 px-3 py-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-xs sm:text-sm text-white/60 hover:text-white/90 transition-all relative group"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    {suggestion.icon}
-                    <span>{suggestion.label}</span>
-                    <motion.div
-                      className="absolute inset-0 border border-white/[0.05] rounded-lg"
-                      initial={false}
-                      animate={{
-                        opacity: [0, 1],
-                        scale: [0.98, 1],
-                      }}
-                      transition={{
-                        duration: 0.3,
-                        ease: "easeOut",
-                      }}
-                    />
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Unobtrusive trust copy */}
-              <div className="text-center pt-2">
-                <p className="text-[11px] font-mono text-white/30 flex items-center justify-center gap-1.5">
-                  <Lock className="w-3 h-3 text-emerald-400" />
-                  <span>Answers grounded in your organization&apos;s records · Tenant-scoped retrieval</span>
-                </p>
               </div>
             </motion.div>
           </div>
         )}
 
-        {/* ── Relative Thinking Pill (Positioned above composer in chat pane) ── */}
+        {/* ── Relative Thinking Indicator ── */}
         <AnimatePresence>
           {isTyping && (
             <motion.div
@@ -616,7 +501,7 @@ export function AnimatedAIChat({
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-center gap-3">
-                <div className="w-7 h-6 rounded-full bg-red-950/50 border border-red-500/30 flex items-center justify-center text-center">
+                <div className="w-6 h-6 rounded-full bg-red-950/50 border border-red-500/30 flex items-center justify-center text-center">
                   <span className="text-[10px] font-bold text-red-200">RF</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs font-medium text-white/80">
@@ -660,46 +545,33 @@ export function AnimatedAIChat({
                     adjustHeight();
                   }}
                   onKeyDown={handleKeyDown}
-                  onFocus={() => setInputFocused(true)}
-                  onBlur={() => setInputFocused(false)}
-                  placeholder={`Ask RF anything about ${currentOrg}...`}
-                  className={cn(
-                    "w-full px-3 py-2 resize-none bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/20 min-h-[52px]",
-                    "transition-all duration-200 ease-in-out"
-                  )}
+                  placeholder="Ask RF..."
+                  className="w-full px-3 py-2 resize-none bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/25 min-h-[52px]"
                   style={{ overflow: "hidden" }}
                 />
               </div>
 
-              <div className="px-4 py-2.5 border-t border-white/[0.05] flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-[11px] text-white/30 font-mono">
-                  <Lock className="w-3 h-3 text-emerald-400" />
-                  <span className="hidden sm:inline">Answers grounded in your organization&apos;s records</span>
-                  <span className="sm:hidden">Tenant-scoped</span>
-                </div>
-
-                <motion.button
+              <div className="px-3 pb-3 flex items-center justify-end">
+                <button
                   type="button"
                   onClick={() => {
-                    if (input.trim() && !isTyping) onSend();
+                    if (input.trim() && !isTyping) void onSend();
                   }}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
                   disabled={isTyping || !input.trim()}
                   className={cn(
-                    "px-4 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-2",
+                    "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
                     input.trim()
-                      ? "bg-white text-[#0A0A0B] shadow-lg shadow-white/10"
-                      : "bg-white/[0.05] text-white/40 cursor-not-allowed"
+                      ? "bg-white text-[#0A0A0B] shadow-md hover:bg-white/90"
+                      : "bg-white/[0.05] text-white/30 cursor-not-allowed"
                   )}
                 >
                   {isTyping ? (
-                    <LoaderIcon className="w-3.5 h-3.5 animate-[spin_2s_linear_infinite]" />
+                    <LoaderIcon className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <SendIcon className="w-3.5 h-3.5" />
                   )}
                   <span>Send</span>
-                </motion.button>
+                </button>
               </div>
             </div>
           </div>

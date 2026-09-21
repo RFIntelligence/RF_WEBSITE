@@ -35,7 +35,7 @@ const SessionContext = createContext<SessionContextValue>({
   session: null,
   isLoading: true,
   error: null,
-  mutate: async () => {},
+  mutate: async () => undefined,
 });
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {

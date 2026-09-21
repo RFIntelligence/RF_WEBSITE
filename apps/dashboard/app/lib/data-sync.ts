@@ -43,11 +43,9 @@ export async function notifyOrgDataChanged(
 
   // 3. Revalidate Next.js cache tags
   try {
-    // Next.js 16 revalidateTag expects (tag, profile) e.g. 'max'
-    // @ts-expect-error Next.js 16 profile argument
-    revalidateTag(`org-${orgId}`, "max");
-    // @ts-expect-error Next.js 16 profile argument
-    revalidateTag(`dashboard-${orgId}`, "max");
+    const reval = revalidateTag as unknown as (tag: string, profile?: string) => void;
+    reval(`org-${orgId}`, "max");
+    reval(`dashboard-${orgId}`, "max");
   } catch {
     // Non-fatal if called outside Next.js request context
   }

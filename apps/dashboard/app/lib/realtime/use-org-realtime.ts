@@ -15,24 +15,16 @@ export interface RealtimeEvent {
   data: unknown;
 }
 
-interface AblyRealtimeLike {
-  channels: {
-    get: (name: string) => {
-      subscribe: (fn: (msg: { name?: string; data?: unknown }) => void) => Promise<void> | void;
-      unsubscribe: (fn: (msg: { name?: string; data?: unknown }) => void) => Promise<void> | void;
-    };
-  };
-  close: () => void;
-}
+import type * as AblyType from "ably";
 
 interface SharedClient {
-  realtime: AblyRealtimeLike;
+  realtime: AblyType.Realtime;
   refCount: number;
 }
 let sharedClient: SharedClient | null = null;
-let sharedClientPromise: Promise<AblyRealtimeLike | null> | null = null;
+let sharedClientPromise: Promise<AblyType.Realtime | null> | null = null;
 
-async function getSharedRealtime(): Promise<AblyRealtimeLike | null> {
+async function getSharedRealtime(): Promise<AblyType.Realtime | null> {
   if (sharedClient) {
     sharedClient.refCount++;
     return sharedClient.realtime;
