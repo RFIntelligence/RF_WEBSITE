@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -15,6 +15,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Separator } from "@/app/components/ui/separator";
@@ -81,6 +82,15 @@ interface AppSidebarProps {
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -202,12 +212,42 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           }}
         >
           <Separator className="mb-2 bg-[var(--dash-sidebar-border)]" />
+
+          {/* Logout */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={loggingOut}
+                  aria-label="Sign out"
+                  className="flex w-full items-center justify-center rounded-md px-2 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-rose-400 outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] disabled:opacity-40"
+                >
+                  <LogOut aria-hidden className="size-4 shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Sign out</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={loggingOut}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-rose-400 outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] disabled:opacity-40"
+            >
+              <LogOut aria-hidden className="size-4 shrink-0" />
+              <span>{loggingOut ? "Signing out…" : "Sign out"}</span>
+            </button>
+          )}
+
+          {/* Collapse toggle */}
           <button
             type="button"
             onClick={onToggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+              "mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
               collapsed && "justify-center"
             )}
           >

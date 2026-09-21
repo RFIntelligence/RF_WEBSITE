@@ -3,19 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { AlertTriangle, AlertCircle, Info, X } from "lucide-react";
-import type { AlertItem, AlertSeverity } from "@/app/lib/mock-data";
+import type { DashboardAlert, AlertSeverity } from "@/app/types/dashboard";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const SEVERITY_CONFIG: Record<
   AlertSeverity,
-  {
-    Icon:       React.ElementType;
-    borderColor: string;
-    bgColor:    string;
-    iconColor:  string;
-    label:      string;
-  }
+  { Icon: React.ElementType; borderColor: string; bgColor: string; iconColor: string; label: string }
 > = {
   critical: {
     Icon:        AlertTriangle,
@@ -46,7 +40,7 @@ function AlertRow({
   alert,
   onDismiss,
 }: {
-  alert: AlertItem;
+  alert: DashboardAlert;
   onDismiss: (id: string) => void;
 }) {
   const cfg = SEVERITY_CONFIG[alert.severity];
@@ -58,22 +52,13 @@ function AlertRow({
       className="flex items-start gap-3 rounded-lg border p-3.5 transition-colors"
       style={{ borderColor: cfg.borderColor, background: cfg.bgColor }}
     >
-      {/* Icon */}
-      <Icon
-        aria-hidden
-        className="mt-0.5 size-4 shrink-0"
-        style={{ color: cfg.iconColor }}
-      />
+      <Icon aria-hidden className="mt-0.5 size-4 shrink-0" style={{ color: cfg.iconColor }} />
 
-      {/* Body */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span
             className="rounded-sm px-1.5 py-0.5 text-[10px] font-mono tracking-wide uppercase"
-            style={{
-              background: `${cfg.iconColor}22`,
-              color: cfg.iconColor,
-            }}
+            style={{ background: `${cfg.iconColor}22`, color: cfg.iconColor }}
           >
             {cfg.label}
           </span>
@@ -81,9 +66,7 @@ function AlertRow({
             {alert.title}
           </p>
         </div>
-        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-          {alert.body}
-        </p>
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">{alert.body}</p>
         <Link
           href={alert.ctaHref}
           className="mt-1.5 inline-block text-xs font-medium transition-colors"
@@ -93,7 +76,6 @@ function AlertRow({
         </Link>
       </div>
 
-      {/* Dismiss */}
       {alert.dismissible && (
         <button
           type="button"
@@ -111,13 +93,17 @@ function AlertRow({
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 interface AlertsPanelProps {
-  alerts: AlertItem[];
+  alerts: DashboardAlert[];
 }
 
 export function AlertsPanel({ alerts: initialAlerts }: AlertsPanelProps) {
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
 
-  const visible = initialAlerts.filter((a) => !dismissed.has(a.id));
+  // Sync when the parent refreshes alert data (e.g. after insight action)
+  const [visible, setVisible] = React.useState<DashboardAlert[]>(initialAlerts);
+  React.useEffect(() => {
+    setVisible(initialAlerts.filter((a) => !dismissed.has(a.id)));
+  }, [initialAlerts, dismissed]);
 
   function dismiss(id: string) {
     setDismissed((prev) => new Set(prev).add(id));
@@ -136,7 +122,6 @@ export function AlertsPanel({ alerts: initialAlerts }: AlertsPanelProps) {
           {visible.length} item{visible.length !== 1 ? "s" : ""} need attention
         </h2>
       </div>
-
       <div className="space-y-2">
         {visible.map((alert) => (
           <AlertRow key={alert.id} alert={alert} onDismiss={dismiss} />

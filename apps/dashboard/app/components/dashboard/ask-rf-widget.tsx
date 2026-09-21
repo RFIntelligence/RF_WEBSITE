@@ -21,7 +21,6 @@ export function AskRFWidget() {
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
   function handlePrompt(text: string) {
-    // In Part 2 this will pass the query as a search param to /ask-rf
     router.push(`/ask-rf?q=${encodeURIComponent(text)}`);
   }
 

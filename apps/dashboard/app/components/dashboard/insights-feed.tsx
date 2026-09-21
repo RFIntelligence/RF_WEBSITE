@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -12,104 +12,149 @@ import {
   CheckCircle,
   XCircle,
   PlusSquare,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
-import type { InsightItem, InsightType, AlertSeverity } from "@/app/lib/mock-data";
+import type { Insight, InsightType, InsightSeverity, InsightActionStatus } from "@/app/types/insight";
 import { InsightModal } from "./insight-modal";
 
 // ─── Config maps ──────────────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<InsightType, React.ElementType> = {
-  risk:        AlertTriangle,
-  opportunity: TrendingUp,
-  anomaly:     AlertTriangle,
-  summary:     FileText,
+  RISK:        AlertTriangle,
+  OPPORTUNITY: TrendingUp,
+  ANOMALY:     AlertTriangle,
+  SUMMARY:     FileText,
 };
 
 const SEVERITY_CONFIG: Record<
-  AlertSeverity,
+  InsightSeverity,
   { chipBg: string; chipText: string; iconColor: string }
 > = {
-  critical: {
-    chipBg:   "rgba(242,78,75,0.12)",
-    chipText: "var(--dash-status-error)",
-    iconColor:"var(--dash-status-error)",
+  CRITICAL: {
+    chipBg:    "rgba(242,78,75,0.12)",
+    chipText:  "var(--dash-status-error)",
+    iconColor: "var(--dash-status-error)",
   },
-  warning: {
-    chipBg:   "rgba(250,204,21,0.12)",
-    chipText: "var(--dash-status-paused)",
-    iconColor:"var(--dash-status-paused)",
+  WARNING: {
+    chipBg:    "rgba(250,204,21,0.12)",
+    chipText:  "var(--dash-status-paused)",
+    iconColor: "var(--dash-status-paused)",
   },
-  info: {
-    chipBg:   "rgba(96,165,250,0.12)",
-    chipText: "var(--dash-chart-secondary)",
-    iconColor:"var(--dash-chart-secondary)",
+  INFO: {
+    chipBg:    "rgba(96,165,250,0.12)",
+    chipText:  "var(--dash-chart-secondary)",
+    iconColor: "var(--dash-chart-secondary)",
   },
 };
 
-const SEVERITY_LABELS: Record<AlertSeverity, string> = {
-  critical: "Critical",
-  warning:  "Warning",
-  info:     "Info",
+const SEVERITY_LABELS: Record<InsightSeverity, string> = {
+  CRITICAL: "Critical",
+  WARNING:  "Warning",
+  INFO:     "Info",
 };
 
 const TYPE_LABELS: Record<InsightType, string> = {
-  risk:        "Risk",
-  opportunity: "Opportunity",
-  anomaly:     "Anomaly",
-  summary:     "Summary",
+  RISK:        "Risk",
+  OPPORTUNITY: "Opportunity",
+  ANOMALY:     "Anomaly",
+  SUMMARY:     "Summary",
 };
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins < 1)   return "Just now";
+  if (mins < 60)  return `${mins} min ago`;
+  if (hours < 24) return `${hours} hr ago`;
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface InsightsFeedProps {
+  insights: Insight[];
+  /** Whether to show the "Analyze now" button (only on the full AI Insights page) */
+  showAnalyzeTrigger?: boolean;
+  /** Called after a successful action so the parent can update its copy */
+  onInsightUpdated?: (updated: Insight) => void;
+  /** Called when user clicks "Analyze now" */
+  onAnalyze?: () => void;
+  analyzing?: boolean;
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface InsightsFeedProps {
-  insights: InsightItem[];
-}
+export function InsightsFeed({
+  insights: initialInsights,
+  showAnalyzeTrigger = false,
+  onInsightUpdated,
+  onAnalyze,
+  analyzing = false,
+}: InsightsFeedProps) {
+  const [items, setItems]               = useState<Insight[]>(initialInsights);
+  const [selectedCategory, setCategory] = useState<string>("all");
+  const [selectedPriority, setPriority] = useState<string>("all");
+  const [selectedTimeframe, setTimeframe] = useState<string>("all");
+  const [activeModal, setActiveModal]   = useState<Insight | null>(null);
+  const [actionPending, setPending]     = useState<string | null>(null); // insightId being actioned
 
-export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
-  const [items, setItems] = useState<InsightItem[]>(initialInsights);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedPriority, setSelectedPriority] = useState<string>("all");
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>("all");
+  // Keep local items in sync when parent refreshes
+  useState(() => { setItems(initialInsights); });
 
-  const [activeModalInsight, setActiveModalInsight] = useState<InsightItem | null>(null);
-
-  // Filtered insights list
   const filteredInsights = useMemo(() => {
     return items.filter((item) => {
-      // Category filter
-      if (selectedCategory !== "all" && item.type !== selectedCategory) {
-        return false;
-      }
-      // Priority filter (severity)
-      if (selectedPriority !== "all" && item.severity !== selectedPriority) {
-        return false;
-      }
-      // Timeframe filter
+      if (selectedCategory !== "all" && item.type !== selectedCategory) return false;
+      if (selectedPriority !== "all" && item.severity !== selectedPriority) return false;
       if (selectedTimeframe === "today") {
-        const isToday = item.relativeTime.includes("min") || item.relativeTime.includes("hr");
-        if (!isToday) return false;
+        const hrs = (Date.now() - new Date(item.createdAt).getTime()) / 3_600_000;
+        if (hrs > 24) return false;
       } else if (selectedTimeframe === "yesterday") {
-        if (!item.relativeTime.toLowerCase().includes("yesterday")) return false;
+        const hrs = (Date.now() - new Date(item.createdAt).getTime()) / 3_600_000;
+        if (hrs < 24 || hrs > 48) return false;
       }
       return true;
     });
   }, [items, selectedCategory, selectedPriority, selectedTimeframe]);
 
-  // Handle action buttons (Accept, Dismiss, Create task)
-  const handleInsightAction = (
-    id: string,
-    status: "accepted" | "dismissed" | "task_created"
-  ) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status, read: true } : item
-      )
-    );
-    if (activeModalInsight?.id === id) {
-      setActiveModalInsight((prev) => (prev ? { ...prev, status, read: true } : null));
-    }
-  };
+  /**
+   * Calls POST /api/insights/:id/action, replaces the item in local state
+   * from the server response (not from the action value), and propagates
+   * the update to the parent so dashboard counts stay in sync.
+   */
+  const handleInsightAction = useCallback(
+    async (id: string, action: InsightActionStatus) => {
+      setPending(id);
+      try {
+        const res = await fetch(`/api/insights/${id}/action`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ action }),
+        });
+        if (!res.ok) {
+          console.error("insight action failed", res.status);
+          return;
+        }
+        const data = (await res.json()) as { insight: Insight };
+        const updated = data.insight;
+
+        setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+
+        if (activeModal?.id === id) {
+          setActiveModal(updated);
+        }
+
+        onInsightUpdated?.(updated);
+      } finally {
+        setPending(null);
+      }
+    },
+    [activeModal, onInsightUpdated],
+  );
 
   return (
     <section aria-labelledby="insights-heading">
@@ -124,54 +169,68 @@ export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
             Recent findings ({filteredInsights.length})
           </h2>
         </div>
-        <Link
-          href="/ai-insights"
-          className="flex items-center gap-1 text-xs text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors group"
-        >
-          All insights
-          <ArrowUpRight
-            aria-hidden
-            className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-          />
-        </Link>
+        <div className="flex items-center gap-2">
+          {showAnalyzeTrigger && (
+            <button
+              type="button"
+              onClick={onAnalyze}
+              disabled={analyzing}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {analyzing ? (
+                <RefreshCw className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Zap className="size-3.5 text-[var(--accent)]" aria-hidden />
+              )}
+              {analyzing ? "Analyzing…" : "Analyze now"}
+            </button>
+          )}
+          <Link
+            href="/ai-insights"
+            className="flex items-center gap-1 text-xs text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors group"
+          >
+            All insights
+            <ArrowUpRight
+              aria-hidden
+              className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+            />
+          </Link>
+        </div>
       </div>
 
-      {/* Filter Controls Row */}
+      {/* Filter Controls */}
       <div className="mb-3 flex items-center gap-2 flex-wrap border-b border-[var(--border)] pb-3">
         <div className="flex items-center gap-1 text-xs text-[var(--text-muted)] mr-1">
-          <Filter className="size-3.5" />
+          <Filter className="size-3.5" aria-hidden />
           <span>Filter by:</span>
         </div>
 
-        {/* Category filter */}
         <select
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
+          onChange={(e) => setCategory(e.target.value)}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
         >
           <option value="all">All Categories</option>
-          <option value="risk">Risk</option>
-          <option value="opportunity">Opportunity</option>
-          <option value="anomaly">Anomaly</option>
-          <option value="summary">Summary</option>
+          <option value="RISK">Risk</option>
+          <option value="OPPORTUNITY">Opportunity</option>
+          <option value="ANOMALY">Anomaly</option>
+          <option value="SUMMARY">Summary</option>
         </select>
 
-        {/* Priority filter */}
         <select
           value={selectedPriority}
-          onChange={(e) => setSelectedPriority(e.target.value)}
+          onChange={(e) => setPriority(e.target.value)}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
         >
           <option value="all">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="warning">Warning</option>
-          <option value="info">Info</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="WARNING">Warning</option>
+          <option value="INFO">Info</option>
         </select>
 
-        {/* Date / Timeframe filter */}
         <select
           value={selectedTimeframe}
-          onChange={(e) => setSelectedTimeframe(e.target.value)}
+          onChange={(e) => setTimeframe(e.target.value)}
           className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
         >
           <option value="all">All Time</option>
@@ -179,15 +238,9 @@ export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
           <option value="yesterday">Yesterday</option>
         </select>
 
-        {(selectedCategory !== "all" ||
-          selectedPriority !== "all" ||
-          selectedTimeframe !== "all") && (
+        {(selectedCategory !== "all" || selectedPriority !== "all" || selectedTimeframe !== "all") && (
           <button
-            onClick={() => {
-              setSelectedCategory("all");
-              setSelectedPriority("all");
-              setSelectedTimeframe("all");
-            }}
+            onClick={() => { setCategory("all"); setPriority("all"); setTimeframe("all"); }}
             className="text-xs text-[var(--accent)] hover:underline ml-auto"
           >
             Reset filters
@@ -195,41 +248,43 @@ export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
         )}
       </div>
 
-      {/* List Feed */}
+      {/* Feed */}
       {filteredInsights.length === 0 ? (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 text-center text-xs text-[var(--text-muted)]">
-          No AI insights match the selected filter criteria.
+          No AI insights match the selected filters.
         </div>
       ) : (
         <div className="space-y-2">
           {filteredInsights.map((item) => {
-            const Icon  = TYPE_ICONS[item.type];
-            const sev   = SEVERITY_CONFIG[item.severity];
+            const Icon = TYPE_ICONS[item.type];
+            const sev  = SEVERITY_CONFIG[item.severity];
+            const isPending = actionPending === item.id;
 
             return (
               <article
                 key={item.id}
                 aria-label={item.title}
-                onClick={() => setActiveModalInsight(item)}
+                onClick={() => !isPending && setActiveModal(item)}
                 className={cn(
                   "group relative cursor-pointer rounded-lg border p-3.5 transition-all duration-150",
                   "hover:border-[var(--border-strong)] hover:bg-[var(--surface-elevated)]",
                   item.read
                     ? "border-[var(--border)] bg-[var(--surface)]"
                     : "border-[var(--border-strong)] bg-[var(--surface)] shadow-xs",
+                  isPending && "opacity-60 pointer-events-none",
                 )}
               >
-                {/* Status indicator tag if acted upon */}
-                {item.status && item.status !== "active" && (
+                {/* Action status tag */}
+                {item.actionStatus && (
                   <div className="absolute top-2 right-2 flex items-center gap-1 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] border border-[var(--border)]">
-                    {item.status === "accepted" && <CheckCircle className="size-3 text-emerald-400" />}
-                    {item.status === "dismissed" && <XCircle className="size-3 text-zinc-400" />}
-                    {item.status === "task_created" && <PlusSquare className="size-3 text-blue-400" />}
-                    <span className="capitalize">{item.status.replace("_", " ")}</span>
+                    {item.actionStatus === "ACCEPTED"     && <CheckCircle className="size-3 text-emerald-400" />}
+                    {item.actionStatus === "DISMISSED"    && <XCircle     className="size-3 text-zinc-400"    />}
+                    {item.actionStatus === "TASK_CREATED" && <PlusSquare  className="size-3 text-blue-400"    />}
+                    <span className="capitalize">{item.actionStatus.toLowerCase().replace("_", " ")}</span>
                   </div>
                 )}
 
-                {/* Top: icon chip + title + unread dot */}
+                {/* Icon + title */}
                 <div className="flex items-start gap-2.5">
                   <span
                     aria-hidden
@@ -242,53 +297,41 @@ export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
                   <div className="flex-1 min-w-0 pr-16">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       {!item.read && (
-                        <span
-                          aria-label="Unread"
-                          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]"
-                        />
+                        <span aria-label="Unread" className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
                       )}
                       <p className="truncate text-[13px] font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
                         {item.title}
                       </p>
                     </div>
-
                     <p className="text-xs text-[var(--text-muted)] leading-relaxed line-clamp-2">
                       {item.body}
                     </p>
                   </div>
                 </div>
 
-                {/* Footer: tags + time + CTA */}
+                {/* Footer */}
                 <div className="mt-2.5 flex items-center justify-between gap-2 pl-[calc(1.75rem+0.625rem)]">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Severity chip */}
                     <span
                       className="rounded-sm px-1.5 py-0.5 text-[10px] font-mono tracking-wide uppercase"
                       style={{ background: sev.chipBg, color: sev.chipText }}
                     >
                       {SEVERITY_LABELS[item.severity]}
                     </span>
-                    {/* Type chip */}
                     <span className="rounded-sm px-1.5 py-0.5 text-[10px] font-mono tracking-wide uppercase bg-[var(--surface-elevated)] text-[var(--text-muted)]">
                       {TYPE_LABELS[item.type]}
                     </span>
                     {item.accountName && (
-                      <span className="text-[10px] text-[var(--text-muted)]">
-                        · {item.accountName}
-                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">· {item.accountName}</span>
                     )}
                   </div>
-
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[11px] text-[var(--text-muted)]">
-                      {item.relativeTime}
+                      {relativeTime(item.createdAt)}
                     </span>
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveModalInsight(item);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setActiveModal(item); }}
                       className="text-[11px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"
                     >
                       {item.ctaLabel} →
@@ -301,13 +344,12 @@ export function InsightsFeed({ insights: initialInsights }: InsightsFeedProps) {
         </div>
       )}
 
-      {/* Slide-over / Modal Detail View */}
       <InsightModal
-        insight={activeModalInsight}
-        onClose={() => setActiveModalInsight(null)}
+        insight={activeModal}
+        onClose={() => setActiveModal(null)}
         onAction={handleInsightAction}
+        actionPending={actionPending}
       />
     </section>
   );
 }
-

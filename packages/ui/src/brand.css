@@ -172,9 +172,9 @@
   --secondary-foreground:   oklch(0.95 0 0);
   --muted:                  oklch(0.18 0.005 260);
   --muted-foreground:       oklch(0.65 0 0);
-  /* shadcn --accent overridden by [data-theme="dark"] block to brand red */
-  --accent:                 oklch(0.7 0.18 145);    /* shadcn fallback (green)  */
-  --accent-foreground:      oklch(0.09 0.005 260);
+  /* shadcn --accent overridden to brand red (RF wins — intentional) */
+  --accent:                 var(--red-100);         /* brand red, not green    */
+  --accent-foreground:      #0D0E12;
   --destructive:            oklch(0.65 0.2 25);
   --destructive-foreground: oklch(0.95 0 0);
   --border:                 oklch(0.22 0.005 260);
@@ -216,8 +216,8 @@
   --secondary-foreground:   oklch(0.95 0 0);
   --muted:                  oklch(0.18 0.005 260);
   --muted-foreground:       oklch(0.65 0 0);
-  --accent:                 oklch(0.7 0.18 145);
-  --accent-foreground:      oklch(0.09 0.005 260);
+  --accent:                 var(--red-100);
+  --accent-foreground:      #0D0E12;
   --destructive:            oklch(0.65 0.2 25);
   --destructive-foreground: oklch(0.95 0 0);
   --border:                 oklch(0.22 0.005 260);

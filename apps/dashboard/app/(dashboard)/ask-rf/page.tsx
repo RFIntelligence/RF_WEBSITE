@@ -1,142 +1,177 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles,
   Send,
-  Building2,
   Lock,
   CornerDownLeft,
   Bot,
   User,
   RotateCcw,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
-import { orgs } from "@/app/lib/mock-data";
 
-// ─── Q&A Pair database for scripted demo ──────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface QAPair {
-  keywords: string[];
-  questionLabel: string;
-  answer: string;
-  sources: string[];
+type SourceType = "insight" | "project" | "report";
+
+interface Source {
+  id: string;
+  type: SourceType;
+  title: string;
+  label: string;
 }
-
-const QA_PAIRS: QAPair[] = [
-  {
-    keywords: ["risk", "at risk", "churn", "attention"],
-    questionLabel: "Which accounts are most at risk this quarter?",
-    answer:
-      "Based on transcript sentiment and activity cadence, **Acme Corp** is your highest risk account ($480K ARR, Renewal in 9 days). Sentiment score dropped from 0.82 to 0.41 over the past 14 days following their executive sponsor change. Additionally, **GlobalFin** is currently blocked on QBR deck preparation due to missing Q2 integration data.",
-    sources: ["Acme Corp Call Transcripts (3)", "GlobalFin Project Log", "CRM Opportunity Health"],
-  },
-  {
-    keywords: ["meridian", "meridian health", "calls", "summarise", "summarize"],
-    questionLabel: "Summarise Meridian Health's last 3 calls",
-    answer:
-      "Key takeaways from Meridian Health's last 3 calls:\n\n1. **High Sentiment (0.88):** Dr. Priya Sharma praised the platform's stability during Horizon v2 beta.\n2. **Seat Expansion:** Mentioned an organic demand for +40 additional user licenses across the clinical team.\n3. **Timeline:** On track for full v2 launch on Sep 28, 2026. Security audit passed with zero high-severity findings.",
-    sources: ["Call Transcript — Aug 28, 2026", "Call Transcript — Sep 04, 2026", "Call Transcript — Sep 09, 2026"],
-  },
-  {
-    keywords: ["concentration", "pipeline concentration", "q4", "arr"],
-    questionLabel: "What's driving pipeline concentration in Q4?",
-    answer:
-      "Three accounts currently constitute **61% ($2.4M)** of total forecasted Q4 ARR: Acme Corp (26%), Meridian Health (20%), and GlobalFin (15%). Your Herfindahl-Hirschman Index (HHI) concentration score is **0.38**, which exceeds the recommended 0.20 threshold. We recommend accelerating stage-2 mid-market deals to hedge against single-deal slippage.",
-    sources: ["Q4 Pipeline Forecast Model", "HHI Concentration Index", "CRM Opportunity Breakdown"],
-  },
-  {
-    keywords: ["renewal", "opportunity", "opportunities", "this month"],
-    questionLabel: "Show me renewal opportunities this month",
-    answer:
-      "There are **2 primary renewal opportunities** scheduled for September 2026:\n\n• **Acme Corp ($480K ARR):** Due Sep 20 — At Risk due to executive sponsor turnover. Immediate alignment call needed.\n• **Northstar Labs ($220K ARR):** Due Sep 15 — On Track (91% onboarding complete). High expansion potential.",
-    sources: ["Contract Renewals DB", "Account Health Scorecard"],
-  },
-];
-
-const DEFAULT_SUGGESTIONS = [
-  "Which accounts are most at risk this quarter?",
-  "Summarise Meridian Health's last 3 calls",
-  "What's driving pipeline concentration in Q4?",
-  "Show me renewal opportunities this month",
-];
-
-const GENERIC_RESPONSE: QAPair = {
-  keywords: [],
-  questionLabel: "",
-  answer:
-    "I analyzed your workspace data across CRM records, meeting transcripts, and project logs. While I couldn't find a direct precedent for that specific phrase in the demo script, I am monitoring **14 Active Projects**, **38 Open Conversations**, and **127 AI Insights** for Acme Corp and connected organizations.",
-  sources: ["Workspace Knowledge Graph", "RF Intelligence Index"],
-};
 
 interface Message {
   id: string;
   sender: "user" | "rf";
   text: string;
   timestamp: string;
-  sources?: string[];
+  sources?: Source[];
+  error?: boolean;
+}
+
+interface SessionInfo {
+  user: { id: string; name: string; email: string; role: string };
+  organization: { id: string; name: string; plan: string } | null;
+}
+
+const DEFAULT_SUGGESTIONS = [
+  "Which accounts are most at risk this quarter?",
+  "What's driving pipeline concentration in Q4?",
+  "Show me renewal opportunities this month",
+  "Summarise the latest project activity",
+];
+
+function nowLabel() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function AskRFContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q");
 
-  const currentOrg = orgs[0]?.name || "Organization";
+  const [session, setSession] = useState<SessionInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  const currentOrg = session?.organization?.name || "your organization";
+
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isTyping]);
+  }, [messages, isTyping, scrollToBottom]);
 
-  // Handle query parameter on mount if present
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        if (res.ok && !cancelled) {
+          setSession((await res.json()) as SessionInfo);
+        }
+      } catch {
+        // Network failure — the send action will surface a clear error.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const handleSend = useCallback(
+    async (textToSend?: string) => {
+      const query = (textToSend ?? input).trim();
+      if (!query || isTyping) return;
+
+      setMessages((prev) => [
+        ...prev,
+        { id: `msg_user_${Date.now()}`, sender: "user", text: query, timestamp: nowLabel() },
+      ]);
+      if (textToSend === undefined) setInput("");
+      setIsTyping(true);
+
+      try {
+        const res = await fetch("/api/ask-rf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Only the question is sent. Identity is resolved server-side from
+          // the session cookie.
+          body: JSON.stringify({ question: query }),
+        });
+
+        if (res.status === 401) {
+          router.replace("/login");
+          return;
+        }
+
+        const data = (await res.json().catch(() => null)) as
+          | { answer?: string; sources?: Source[]; error?: string }
+          | null;
+
+        if (!res.ok || !data?.answer) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg_rf_${Date.now()}`,
+              sender: "rf",
+              text: data?.error || "Ask RF is temporarily unavailable. Please try again.",
+              timestamp: nowLabel(),
+              error: true,
+            },
+          ]);
+          return;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg_rf_${Date.now()}`,
+            sender: "rf",
+            text: data.answer as string,
+            timestamp: nowLabel(),
+            sources: data.sources ?? [],
+          },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg_rf_${Date.now()}`,
+            sender: "rf",
+            text: "Could not reach Ask RF. Check your connection and try again.",
+            timestamp: nowLabel(),
+            error: true,
+          },
+        ]);
+      } finally {
+        setIsTyping(false);
+      }
+    },
+    [input, isTyping, router],
+  );
+
   useEffect(() => {
     if (initialQuery && messages.length === 0) {
+      // Fire the query handed off from the dashboard widget on first mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleSend(initialQuery);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
-
-  const handleSend = (textToSend?: string) => {
-    const query = textToSend || input.trim();
-    if (!query) return;
-
-    const userMsg: Message = {
-      id: `msg_user_${Date.now()}`,
-      sender: "user",
-      text: query,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    if (!textToSend) setInput("");
-    setIsTyping(true);
-
-    // Simulate AI thinking delay for realistic demo
-    setTimeout(() => {
-      const lower = query.toLowerCase();
-      const match = QA_PAIRS.find((pair) =>
-        pair.keywords.some((kw) => lower.includes(kw))
-      ) || GENERIC_RESPONSE;
-
-      const rfMsg: Message = {
-        id: `msg_rf_${Date.now()}`,
-        sender: "rf",
-        text: match.answer,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        sources: match.sources,
-      };
-
-      setMessages((prev) => [...prev, rfMsg]);
-      setIsTyping(false);
-    }, 600);
-  };
 
   return (
     <div className="mx-auto max-w-[1000px] flex flex-col h-[calc(100vh-6.5rem)]">
@@ -184,14 +219,18 @@ function AskRFContent() {
                 Query your workspace in natural language
               </h2>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                RF Intelligence connects call transcripts, CRM metrics, and project logs to answer complex business questions with complete context.
+                RF Intelligence retrieves relevant insights, projects and reports from
+                {" "}
+                <span className="font-medium text-[var(--text-primary)]">{currentOrg}</span>
+                {" "}
+                and answers using only that context.
               </p>
             </div>
 
             {/* Suggested Question Chips */}
             <div className="w-full space-y-2 pt-2">
               <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
-                Suggested questions for demo:
+                Suggested questions
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {DEFAULT_SUGGESTIONS.map((suggestion) => (
@@ -221,10 +260,18 @@ function AskRFContent() {
                   className={`size-8 rounded-lg flex shrink-0 items-center justify-center text-xs font-medium ${
                     msg.sender === "user"
                       ? "bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--text-primary)]"
-                      : "bg-[var(--accent)] text-white shadow-xs"
+                      : msg.error
+                        ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                        : "bg-[var(--accent)] text-white shadow-xs"
                   }`}
                 >
-                  {msg.sender === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
+                  {msg.sender === "user" ? (
+                    <User className="size-4" />
+                  ) : msg.error ? (
+                    <AlertCircle className="size-4" />
+                  ) : (
+                    <Bot className="size-4" />
+                  )}
                 </div>
 
                 {/* Content Bubble */}
@@ -233,7 +280,9 @@ function AskRFContent() {
                     className={`rounded-xl p-4 text-xs leading-relaxed ${
                       msg.sender === "user"
                         ? "bg-[var(--accent)]/10 border border-[var(--accent)]/20 text-[var(--text-primary)]"
-                        : "bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--text-primary)]"
+                        : msg.error
+                          ? "bg-amber-500/5 border border-amber-500/20 text-[var(--text-primary)]"
+                          : "bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--text-primary)]"
                     }`}
                   >
                     {msg.text.split("\n\n").map((paragraph, i) => (
@@ -256,14 +305,15 @@ function AskRFContent() {
                     <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono text-[var(--text-muted)] pl-1">
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="size-3 text-emerald-400" />
-                        Verified sources:
+                        Sources:
                       </span>
-                      {msg.sources.map((src, sIdx) => (
+                      {msg.sources.map((src) => (
                         <span
-                          key={sIdx}
+                          key={src.id}
+                          title={`${src.type}: ${src.title}`}
                           className="bg-[var(--surface-elevated)] border border-[var(--border)] px-1.5 py-0.5 rounded-xs"
                         >
-                          {src}
+                          {src.label} · {src.title}
                         </span>
                       ))}
                     </div>
@@ -283,7 +333,7 @@ function AskRFContent() {
                 </div>
                 <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-4 py-3 text-xs text-[var(--text-muted)] flex items-center gap-2">
                   <span className="size-2 rounded-full bg-[var(--accent)] animate-pulse" />
-                  RF is searching workspace index...
+                  RF is retrieving your workspace context...
                 </div>
               </div>
             )}
@@ -321,9 +371,9 @@ function AskRFContent() {
         <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
           <span className="flex items-center gap-1">
             <Lock className="size-2.5 text-emerald-400" />
-            SOC2 Type II Compliant · Encrypted in-flight & at rest
+            Answers grounded in your organization&apos;s records
           </span>
-          <span>Part 1 Scripted Demo</span>
+          <span>Tenant-scoped retrieval</span>
         </div>
       </div>
     </div>

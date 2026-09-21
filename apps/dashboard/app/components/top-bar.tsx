@@ -20,8 +20,12 @@ import {
 import {
   MOCK_USER,
   MOCK_ORGS,
-  MOCK_NOTIFICATIONS,
 } from "@/app/lib/mock-data";
+import { formatRelativeTime } from "@/app/lib/format";
+import {
+  useOrgRealtime,
+  type RealtimeEvent,
+} from "@/app/lib/realtime/use-org-realtime";
 
 // ─── Page title map ───────────────────────────────────────────────────────────
 
@@ -46,62 +50,150 @@ function usePageTitle() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function OrgSwitcher() {
-  const [activeOrg, setActiveOrg] = React.useState(MOCK_ORGS[0]!.id);
-  const current = MOCK_ORGS.find((o) => o.id === activeOrg) ?? MOCK_ORGS[0]!;
+interface SessionResponse {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  organization: {
+    id: string;
+    name: string;
+    plan: string;
+  } | null;
+}
+
+function OrgIndicator() {
+  const [org, setOrg] = React.useState<{ name: string; plan: string } | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (!res.ok) return;
+        const data = (await res.json()) as SessionResponse;
+        if (active && data.organization) {
+          setOrg({ name: data.organization.name, plan: data.organization.plan });
+        }
+      } catch {
+        // non-fatal
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Switch organisation"
-          className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
-        >
-          <Building2 aria-hidden className="size-3.5 text-[var(--text-muted)]" />
-          <span className="hidden sm:inline max-w-[120px] truncate font-medium text-[var(--text-primary)]">
-            {current.name}
-          </span>
-          <Badge variant="accent" className="hidden sm:inline-flex py-0 px-1 text-[10px]">
-            {current.plan}
-          </Badge>
-          <ChevronDown aria-hidden className="size-3 text-[var(--text-muted)]" />
-        </button>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>Organisations</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup value={activeOrg} onValueChange={setActiveOrg}>
-          {MOCK_ORGS.map((org) => (
-            <DropdownMenuRadioItem key={org.id} value={org.id} className="gap-2">
-              <div className="flex flex-1 items-center justify-between">
-                <span>{org.name}</span>
-                {org.id === activeOrg && (
-                  <Check aria-hidden className="size-3.5 text-[var(--accent)]" />
-                )}
-              </div>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--text-secondary)] select-none">
+      <Building2 aria-hidden className="size-3.5 text-[var(--text-muted)]" />
+      <span className="hidden sm:inline max-w-[140px] truncate font-medium text-[var(--text-primary)]">
+        {org?.name ?? "Acme Corp"}
+      </span>
+      <Badge variant="accent" className="hidden sm:inline-flex py-0 px-1 text-[10px]">
+        {org?.plan ?? "Enterprise"}
+      </Badge>
+    </div>
   );
 }
 
+interface ApiNotification {
+  id: string;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
 function NotificationBell() {
-  const unread = MOCK_NOTIFICATIONS.filter((n) => !n.read);
+  const [notifications, setNotifications] = React.useState<ApiNotification[]>(
+    [],
+  );
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [orgId, setOrgId] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        notifications: ApiNotification[];
+        unreadCount: number;
+      };
+      setNotifications(data.notifications);
+      setUnreadCount(data.unreadCount);
+    } catch {
+      // The bell is non-critical; leave the last known state in place.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          organization: { id: string } | null;
+        };
+        if (!cancelled) setOrgId(data.organization?.id ?? null);
+      } catch {
+        // Realtime is optional; polling remains available.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRealtime = React.useCallback(
+    (event: RealtimeEvent) => {
+      if (event.name === "notification:new") void load();
+    },
+    [load],
+  );
+
+  const { live } = useOrgRealtime(orgId, "notifications", handleRealtime);
+
+  React.useEffect(() => {
+    if (live) return;
+    const interval = setInterval(() => {
+      void load();
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [live, load]);
+
+  const markAllRead = React.useCallback(async () => {
+    setUnreadCount(0);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+    } catch {
+      void load();
+    }
+  }, [load]);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={`Notifications${unread.length > 0 ? `, ${unread.length} unread` : ""}`}
+          aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
           className="relative flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
         >
           <Bell aria-hidden className="size-4" />
-          {unread.length > 0 && (
+          {unreadCount > 0 && (
             <span
               aria-hidden
               className="absolute right-1.5 top-1.5 flex h-2 w-2 items-center justify-center rounded-full bg-[var(--accent)]"
@@ -113,12 +205,23 @@ function NotificationBell() {
       <DropdownMenuContent align="end" className="w-80">
         <div className="flex items-center justify-between px-2 py-1.5">
           <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
-          {unread.length > 0 && (
-            <Badge variant="accent">{unread.length} new</Badge>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              className="text-[11px] font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+            >
+              Mark all read
+            </button>
           )}
         </div>
         <DropdownMenuSeparator />
-        {MOCK_NOTIFICATIONS.map((n) => (
+        {notifications.length === 0 && (
+          <p className="px-3 py-3 text-xs text-[var(--text-muted)]">
+            You&apos;re all caught up.
+          </p>
+        )}
+        {notifications.map((n) => (
           <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5 py-2.5">
             <div className="flex w-full items-start justify-between gap-2">
               <span
@@ -138,7 +241,7 @@ function NotificationBell() {
                 {n.title}
               </span>
               <span className="shrink-0 text-[11px] text-[var(--text-muted)]">
-                {n.relativeTime}
+                {formatRelativeTime(n.createdAt)}
               </span>
             </div>
             <p className="text-[11px] text-[var(--text-muted)] leading-snug">
@@ -256,7 +359,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
 
       {/* Right cluster */}
       <div className="ml-auto flex items-center gap-1">
-        <OrgSwitcher />
+        <OrgIndicator />
         <NotificationBell />
         <UserMenu />
       </div>
