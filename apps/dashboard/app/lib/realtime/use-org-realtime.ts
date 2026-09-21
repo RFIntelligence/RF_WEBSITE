@@ -55,10 +55,15 @@ function releaseSharedRealtime() {
   if (sharedClient) {
     sharedClient.refCount--;
     if (sharedClient.refCount <= 0) {
-      try {
-        sharedClient.realtime.close();
-      } catch {}
+      const clientToClose = sharedClient.realtime;
       sharedClient = null;
+      try {
+        if (clientToClose && typeof clientToClose.close === "function") {
+          clientToClose.close();
+        }
+      } catch {
+        // Silently swallow already-closed or in-flight close errors
+      }
     }
   }
 }
