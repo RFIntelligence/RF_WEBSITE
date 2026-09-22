@@ -20,36 +20,84 @@ function parseLimit(raw: string | null): number {
 
 import { withTiming } from "@/app/lib/timing";
 
+// ─── 15s Server Cache & In-flight Promise per user ───────────────────────────
+
+interface CachedNotifications {
+  data: { notifications: any[]; unreadCount: number };
+  expiresAt: number;
+}
+
+const notificationsCache = new Map<string, CachedNotifications>();
+const notificationsInFlight = new Map<string, Promise<{ notifications: any[]; unreadCount: number }>>();
+const NOTIFICATIONS_CACHE_TTL_MS = 15_000;
+
+export function invalidateNotificationsCache(userId?: string) {
+  if (userId) {
+    notificationsCache.delete(userId);
+    notificationsInFlight.delete(userId);
+  } else {
+    notificationsCache.clear();
+    notificationsInFlight.clear();
+  }
+}
+
 export async function GET(request: Request): Promise<Response> {
   return withTiming("GET /api/notifications", async () => {
     const session = await getSession();
     if (!session) return json({ error: "Unauthorized" }, 401);
 
     const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
+    const cacheKey = `${session.userId}::${limit}`;
 
-    const [notifications, unreadCount] = await Promise.all([
-      prisma.notification.findMany({
-        where: { organizationId: session.organizationId, userId: session.userId },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        select: {
-          id: true,
-          title: true,
-          body: true,
-          read: true,
-          createdAt: true,
-        },
-      }),
-      prisma.notification.count({
-        where: {
-          organizationId: session.organizationId,
-          userId: session.userId,
-          read: false,
-        },
-      }),
-    ]);
+    const cached = notificationsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return json(cached.data);
+    }
 
-    return json({ notifications, unreadCount });
+    const inFlight = notificationsInFlight.get(cacheKey);
+    if (inFlight) {
+      const data = await inFlight;
+      return json(data);
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const [notifications, unreadCount] = await Promise.all([
+          prisma.notification.findMany({
+            where: { organizationId: session.organizationId, userId: session.userId },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              body: true,
+              read: true,
+              createdAt: true,
+            },
+          }),
+          prisma.notification.count({
+            where: {
+              organizationId: session.organizationId,
+              userId: session.userId,
+              read: false,
+            },
+          }),
+        ]);
+
+        const result = { notifications, unreadCount };
+        notificationsCache.set(cacheKey, {
+          data: result,
+          expiresAt: Date.now() + NOTIFICATIONS_CACHE_TTL_MS,
+        });
+        return result;
+      } finally {
+        notificationsInFlight.delete(cacheKey);
+      }
+    })();
+
+    notificationsInFlight.set(cacheKey, fetchPromise);
+    const data = await fetchPromise;
+    return json(data);
   });
 }
 
@@ -95,6 +143,8 @@ export async function PATCH(request: Request): Promise<Response> {
       read: false,
     },
   });
+
+  invalidateNotificationsCache(session.userId);
 
   return json({ updated: result.count, unreadCount });
 }

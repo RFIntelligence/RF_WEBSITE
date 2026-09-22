@@ -29,14 +29,17 @@ interface CachedSession {
   expiresAt: number;
 }
 const sessionCache = new Map<string, CachedSession>();
+const sessionInFlight = new Map<string, Promise<Session | null>>();
 const SESSION_CACHE_TTL_MS = 45_000; // 45 seconds in-memory cache keyed by session/user id
 
 export function invalidateSessionCache(userId: string) {
   sessionCache.delete(userId);
+  sessionInFlight.delete(userId);
 }
 
 export function clearAllSessionCache() {
   sessionCache.clear();
+  sessionInFlight.clear();
 }
 
 function getSecret(): string {
@@ -91,9 +94,8 @@ export function verifySessionToken(
 
 /**
  * Resolves the current session from the signed, httpOnly cookie.
- * Validates the cookie first, checks in-memory cache (45s), and hits DB only when needed.
- * Combines user + organization into ONE single DB query with include: { organization: true }
- * to eliminate extra round-trips over high latency connections.
+ * Validates the cookie first, checks in-memory cache (45s), and shares in-flight promises
+ * so concurrent requests for the same session share one DB call without thundering herd.
  */
 export async function getSession(): Promise<Session | null> {
   const store = await cookies();
@@ -109,41 +111,56 @@ export async function getSession(): Promise<Session | null> {
     return cached.session;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: verified.uid },
-    select: {
-      id: true,
-      organizationId: true,
-      name: true,
-      email: true,
-      role: true,
-      organization: {
+  // Deduplicate in-flight DB lookup for the same session
+  const inFlight = sessionInFlight.get(verified.uid);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const lookupPromise = (async () => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: verified.uid },
         select: {
           id: true,
+          organizationId: true,
           name: true,
-          plan: true,
+          email: true,
+          role: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              plan: true,
+            },
+          },
         },
-      },
-    },
-  });
-  if (!user) return null;
+      });
+      if (!user) return null;
 
-  const session: Session = {
-    userId: user.id,
-    organizationId: user.organizationId,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    organization: user.organization,
-  };
+      const session: Session = {
+        userId: user.id,
+        organizationId: user.organizationId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        organization: user.organization,
+      };
 
-  // Cache combined session in memory
-  sessionCache.set(verified.uid, {
-    session,
-    expiresAt: Date.now() + SESSION_CACHE_TTL_MS,
-  });
+      // Cache combined session in memory
+      sessionCache.set(verified.uid, {
+        session,
+        expiresAt: Date.now() + SESSION_CACHE_TTL_MS,
+      });
 
-  return session;
+      return session;
+    } finally {
+      sessionInFlight.delete(verified.uid);
+    }
+  })();
+
+  sessionInFlight.set(verified.uid, lookupPromise);
+  return lookupPromise;
 }
 
 export async function setSessionCookie(userId: string): Promise<void> {
