@@ -32,6 +32,10 @@ async function getSharedRealtime(channelName?: string): Promise<AblyType.Realtim
   }
 
   if (sharedClient) {
+    if (closeTimeout) {
+      clearTimeout(closeTimeout);
+      closeTimeout = null;
+    }
     sharedClient.refCount++;
     if (channelName) {
       sharedClient.currentChannel = channelName;
@@ -74,19 +78,29 @@ async function getSharedRealtime(channelName?: string): Promise<AblyType.Realtim
   return sharedClientPromise;
 }
 
+let closeTimeout: NodeJS.Timeout | null = null;
+
 function releaseSharedRealtime() {
   if (sharedClient) {
     sharedClient.refCount--;
     if (sharedClient.refCount <= 0) {
-      const clientToClose = sharedClient.realtime;
-      sharedClient = null;
-      try {
-        if (clientToClose && typeof clientToClose.close === "function") {
-          clientToClose.close();
-        }
-      } catch {
-        // Silently swallow already-closed or in-flight close errors
+      if (closeTimeout) {
+        clearTimeout(closeTimeout);
       }
+      // Delay closing by ~1s so React StrictMode's mount/unmount/remount does not close the shared connection
+      closeTimeout = setTimeout(() => {
+        if (sharedClient && sharedClient.refCount <= 0) {
+          const clientToClose = sharedClient.realtime;
+          sharedClient = null;
+          try {
+            if (clientToClose && typeof clientToClose.close === "function") {
+              clientToClose.close();
+            }
+          } catch {
+            // Silently swallow already-closed or in-flight close errors
+          }
+        }
+      }, 1000);
     }
   }
 }
