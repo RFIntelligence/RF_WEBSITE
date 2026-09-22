@@ -172,7 +172,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // 7. Workspace Sources Retrieval
+  const dbStart = Date.now();
   const rawSources = await retrieveContext(orgId, question);
+  const dbRetrievalTime = Date.now() - dbStart;
+
   const finalSources = rawSources.map((source, index) => ({
     id: source.id,
     type: source.type,
@@ -181,6 +184,7 @@ export async function POST(request: Request): Promise<Response> {
   }));
 
   let answer: string;
+  const modelStart = Date.now();
   try {
     answer = await askDeepSeek(question, rawSources);
   } catch (error) {
@@ -193,8 +197,10 @@ export async function POST(request: Request): Promise<Response> {
       502,
     );
   }
+  const modelTime = Date.now() - modelStart;
 
   // 8. Audit trail persistence to prisma.askRfQuery
+  const auditStart = Date.now();
   try {
     await prisma.askRfQuery.create({
       data: {
@@ -208,6 +214,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     console.error("Ask RF: failed to persist query log", error);
   }
+  const totalDbTime = dbRetrievalTime + (Date.now() - auditStart);
 
   // 9. Cache Answer
   saveToCache(cacheKey, {
@@ -225,6 +232,8 @@ export async function POST(request: Request): Promise<Response> {
     tier: category,
     cached: false,
     durationMs: totalDuration,
+    dbMs: totalDbTime,
+    modelMs: modelTime,
     orgId,
     userId,
   }));
@@ -236,9 +245,17 @@ export async function POST(request: Request): Promise<Response> {
       tier: category,
       cached: false,
       dataVersion: orgDataVersion,
+      metrics: {
+        dbMs: totalDbTime,
+        modelMs: modelTime,
+        totalMs: totalDuration,
+      },
     },
     200,
-    { "X-Ask-Cache": "MISS" }
+    {
+      "X-Ask-Cache": "MISS",
+      "Server-Timing": `db;dur=${totalDbTime}, model;dur=${modelTime}, total;dur=${totalDuration}`,
+    }
   );
 }
 
