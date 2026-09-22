@@ -461,18 +461,23 @@ export function AnimatedAIChat({
                 What would you like to know?
               </h1>
 
-              {/* 3 Suggested Prompts directly above input bar */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                {promptChips.map((promptText) => (
-                  <button
-                    key={promptText}
-                    type="button"
-                    onClick={() => onSend(promptText)}
-                    className="px-3 py-1.5 rounded-full text-xs bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-red-500/40 text-white/75 hover:text-white transition-all shadow-sm"
-                  >
-                    {promptText}
-                  </button>
-                ))}
+              {/* Quick Questions preloaded prompt chips directly above input bar */}
+              <div className="space-y-2 pt-2">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-white/40 block">
+                  Quick Questions
+                </span>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {promptChips.map((promptText) => (
+                    <button
+                      key={promptText}
+                      type="button"
+                      onClick={() => onSend(promptText)}
+                      className="px-3 py-1.5 rounded-full text-xs bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-red-500/40 text-white/75 hover:text-white transition-all shadow-sm"
+                    >
+                      {promptText}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Minimal Glass Composer */}
