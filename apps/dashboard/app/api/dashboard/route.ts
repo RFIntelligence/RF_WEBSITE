@@ -11,7 +11,7 @@
  */
 
 import { getSession } from "@/app/lib/session";
-import { prisma }     from "@/app/lib/db";
+import { prisma, Prisma } from "@/app/lib/db";
 import type { DashboardData, MetricCard, DashboardAlert, RecentConversation } from "@/app/types/dashboard";
 import type { Project }  from "@/app/types/project";
 import type { Insight, InsightActionStatus, ChartDataPoint } from "@/app/types/insight";
@@ -59,96 +59,68 @@ function parseChartData(json: string): ChartDataPoint[] {
   } catch { return []; }
 }
 
-// ─── Metric card computation ──────────────────────────────────────────────────
 
-async function buildMetricCards(
-  orgId: string,
-  now: Date,
-): Promise<{ cards: MetricCard[]; countErrors: Record<string, boolean> }> {
+// ─── Metric card computation & Counts ─────────────────────────────────────────
+
+interface CountsRaw {
+  active_projects: bigint | number;
+  prev_projects: bigint | number;
+  open_convs: bigint | number;
+  prev_convs: bigint | number;
+  ins_30d: bigint | number;
+  ins_60d: bigint | number;
+  unread_insights: bigint | number;
+  members: bigint | number;
+  prev_members: bigint | number;
+  total_actioned: bigint | number;
+  accepted_actioned: bigint | number;
+  prev_total: bigint | number;
+  prev_accepted: bigint | number;
+}
+
+async function fetchAggregatedCounts(orgId: string, now: Date): Promise<{
+  counts: CountsRaw;
+  cards: MetricCard[];
+}> {
   const thirtyDaysAgo  = new Date(now.getTime() - 30 * 86_400_000);
   const sixtyDaysAgo   = new Date(now.getTime() - 60 * 86_400_000);
   const quarterAgo     = new Date(now.getTime() - 90 * 86_400_000);
   const prevQuarterAgo = new Date(now.getTime() - 180 * 86_400_000);
   const yesterday      = new Date(now.getTime() - 86_400_000);
 
-  // Grouped counts with fallback
-  const results = await Promise.allSettled([
-    prisma.project.count({
-      where: { organizationId: orgId, status: { not: "COMPLETED" } },
-    }),
-    prisma.project.count({
-      where: {
-        organizationId: orgId,
-        status: { not: "COMPLETED" },
-        createdAt: { lt: thirtyDaysAgo },
-      },
-    }),
-    prisma.conversation.count({
-      where: { organizationId: orgId, unread: true },
-    }),
-    prisma.conversation.count({
-      where: { organizationId: orgId, unread: true, createdAt: { lt: yesterday } },
-    }),
-    prisma.insight.count({
-      where: { organizationId: orgId, createdAt: { gte: thirtyDaysAgo } },
-    }),
-    prisma.insight.count({
-      where: {
-        organizationId: orgId,
-        createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
-      },
-    }),
-    prisma.user.count({ where: { organizationId: orgId } }),
-    prisma.user.count({
-      where: { organizationId: orgId, createdAt: { lt: thirtyDaysAgo } },
-    }),
-    prisma.insightAction.count({
-      where: { organizationId: orgId, performedAt: { gte: quarterAgo } },
-    }),
-    prisma.insightAction.count({
-      where: {
-        organizationId: orgId,
-        actionStatus: "ACCEPTED",
-        performedAt: { gte: quarterAgo },
-      },
-    }),
-    prisma.insightAction.count({
-      where: {
-        organizationId: orgId,
-        performedAt: { gte: prevQuarterAgo, lt: quarterAgo },
-      },
-    }),
-    prisma.insightAction.count({
-      where: {
-        organizationId: orgId,
-        actionStatus: "ACCEPTED",
-        performedAt: { gte: prevQuarterAgo, lt: quarterAgo },
-      },
-    }),
-  ]);
+  // Single SQL query replacing 13 count round-trips
+  const rows = await prisma.$queryRaw<CountsRaw[]>(Prisma.sql`
+    SELECT
+      (SELECT COUNT(*) FROM "projects" WHERE "organizationId" = ${orgId} AND status != 'COMPLETED') as active_projects,
+      (SELECT COUNT(*) FROM "projects" WHERE "organizationId" = ${orgId} AND status != 'COMPLETED' AND "createdAt" < ${thirtyDaysAgo}) as prev_projects,
+      (SELECT COUNT(*) FROM "conversations" WHERE "organizationId" = ${orgId} AND unread = true) as open_convs,
+      (SELECT COUNT(*) FROM "conversations" WHERE "organizationId" = ${orgId} AND unread = true AND "createdAt" < ${yesterday}) as prev_convs,
+      (SELECT COUNT(*) FROM "insights" WHERE "organizationId" = ${orgId} AND "createdAt" >= ${thirtyDaysAgo}) as ins_30d,
+      (SELECT COUNT(*) FROM "insights" WHERE "organizationId" = ${orgId} AND "createdAt" >= ${sixtyDaysAgo} AND "createdAt" < ${thirtyDaysAgo}) as ins_60d,
+      (SELECT COUNT(*) FROM "insights" WHERE "organizationId" = ${orgId} AND read = false) as unread_insights,
+      (SELECT COUNT(*) FROM "users" WHERE "organizationId" = ${orgId}) as members,
+      (SELECT COUNT(*) FROM "users" WHERE "organizationId" = ${orgId} AND "createdAt" < ${thirtyDaysAgo}) as prev_members,
+      (SELECT COUNT(*) FROM "insight_actions" WHERE "organizationId" = ${orgId} AND "performedAt" >= ${quarterAgo}) as total_actioned,
+      (SELECT COUNT(*) FROM "insight_actions" WHERE "organizationId" = ${orgId} AND "actionStatus" = 'ACCEPTED' AND "performedAt" >= ${quarterAgo}) as accepted_actioned,
+      (SELECT COUNT(*) FROM "insight_actions" WHERE "organizationId" = ${orgId} AND "performedAt" >= ${prevQuarterAgo} AND "performedAt" < ${quarterAgo}) as prev_total,
+      (SELECT COUNT(*) FROM "insight_actions" WHERE "organizationId" = ${orgId} AND "actionStatus" = 'ACCEPTED' AND "performedAt" >= ${prevQuarterAgo} AND "performedAt" < ${quarterAgo}) as prev_accepted
+  `);
 
-  const countErrors = {
-    projects: results[0].status === "rejected" || results[1].status === "rejected",
-    conversations: results[2].status === "rejected" || results[3].status === "rejected",
-    insights: results[4].status === "rejected" || results[5].status === "rejected",
-    renewal: results[8].status === "rejected" || results[9].status === "rejected",
-    team: results[6].status === "rejected" || results[7].status === "rejected",
-  };
+  const r = rows[0] || {} as Partial<CountsRaw>;
+  const toNum = (val: bigint | number | undefined | null) => (val !== undefined && val !== null ? Number(val) : 0);
 
-  const val = (idx: number) => results[idx].status === "fulfilled" ? (results[idx] as PromiseFulfilledResult<number>).value : 0;
-
-  const activeProjectCount = val(0);
-  const prevProjectCount   = val(1);
-  const openConvCount      = val(2);
-  const prevConvCount      = val(3);
-  const insightCount30d    = val(4);
-  const insightCount60d    = val(5);
-  const memberCount        = val(6);
-  const prevMemberCount    = val(7);
-  const totalActioned      = val(8);
-  const acceptedActioned   = val(9);
-  const prevTotal          = val(10);
-  const prevAccepted       = val(11);
+  const activeProjectCount = toNum(r.active_projects);
+  const prevProjectCount   = toNum(r.prev_projects);
+  const openConvCount      = toNum(r.open_convs);
+  const prevConvCount      = toNum(r.prev_convs);
+  const insightCount30d    = toNum(r.ins_30d);
+  const insightCount60d    = toNum(r.ins_60d);
+  const memberCount        = toNum(r.members);
+  const prevMemberCount    = toNum(r.prev_members);
+  const totalActioned      = toNum(r.total_actioned);
+  const acceptedActioned   = toNum(r.accepted_actioned);
+  const prevTotal          = toNum(r.prev_total);
+  const prevAccepted       = toNum(r.prev_accepted);
 
   const renewalRate = totalActioned > 0 ? Math.round((acceptedActioned / totalActioned) * 100) : 0;
   const prevRenewalRate = prevTotal > 0 ? Math.round((prevAccepted / prevTotal) * 100) : 0;
@@ -222,35 +194,15 @@ async function buildMetricCards(
     },
   ];
 
-  return { cards, countErrors };
+  return { counts: r as CountsRaw, cards };
 }
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
+// ─── Alerts Formatter ─────────────────────────────────────────────────────────
 
-async function buildAlerts(orgId: string): Promise<DashboardAlert[]> {
-  const [atRiskProjectsRes, criticalInsightsRes] = await Promise.allSettled([
-    prisma.project.findMany({
-      where:   { organizationId: orgId, status: { in: ["AT_RISK", "BLOCKED"] } },
-      orderBy: { updatedAt: "desc" },
-      take:    3,
-      select:  { id: true, name: true, status: true, accountName: true, dueDate: true },
-    }),
-    prisma.insight.findMany({
-      where: {
-        organizationId: orgId,
-        severity: "CRITICAL",
-        read: false,
-        actions: { none: { actionStatus: { in: ["DISMISSED", "ACCEPTED"] } } },
-      },
-      orderBy: { createdAt: "desc" },
-      take:    3,
-      select:  { id: true, title: true, body: true, accountName: true },
-    }),
-  ]);
-
-  const atRiskProjects = atRiskProjectsRes.status === "fulfilled" ? atRiskProjectsRes.value : [];
-  const criticalInsights = criticalInsightsRes.status === "fulfilled" ? criticalInsightsRes.value : [];
-
+function formatAlerts(
+  atRiskProjects: Array<{ id: string; name: string; status: string; accountName: string; dueDate: Date }>,
+  criticalInsights: Array<{ id: string; title: string; body: string; accountName: string | null }>,
+): DashboardAlert[] {
   const alerts: DashboardAlert[] = [];
 
   for (const p of atRiskProjects) {
@@ -288,56 +240,43 @@ async function buildAlerts(orgId: string): Promise<DashboardAlert[]> {
 
 // ─── Recent conversations ─────────────────────────────────────────────────────
 
-async function buildRecentConversations(orgId: string): Promise<RecentConversation[]> {
-  try {
-    const rows = await prisma.conversation.findMany({
-      where:   { organizationId: orgId },
-      orderBy: { updatedAt: "desc" },
-      take:    5,
-      select: {
-        id:           true,
-        topic:        true,
-        contextLabel: true,
-        rfLead:       true,
-        unread:       true,
-        updatedAt:    true,
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take:    1,
-          select:  {
-            content:   true,
-            createdAt: true,
-            sender: { select: { name: true, avatarInitials: true } },
-          },
-        },
-      },
-    });
+type RawConvRow = {
+  id: string;
+  topic: string;
+  contextLabel: string;
+  rfLead: string;
+  unread: boolean;
+  updatedAt: Date;
+  messages: Array<{
+    content: string;
+    createdAt: Date;
+    sender: { name: string; avatarInitials: string };
+  }>;
+};
 
-    return rows.map((row) => {
-      const lastMsg    = row.messages[0] ?? null;
-      const senderName = lastMsg?.sender.name ?? row.rfLead;
-      const initials   = lastMsg?.sender.avatarInitials
-        ?? row.rfLead
-             .split(" ")
-             .map((w) => w[0])
-             .join("")
-             .toUpperCase()
-             .slice(0, 2);
+function formatRecentConversations(rows: RawConvRow[]): RecentConversation[] {
+  return rows.map((row) => {
+    const lastMsg    = row.messages[0] ?? null;
+    const senderName = lastMsg?.sender.name ?? row.rfLead;
+    const initials   = lastMsg?.sender.avatarInitials
+      ?? row.rfLead
+           .split(" ")
+           .map((w) => w[0])
+           .join("")
+           .toUpperCase()
+           .slice(0, 2);
 
-      return {
-        id:           row.id,
-        senderName,
-        senderInitials: initials,
-        preview:      lastMsg?.content ?? row.topic,
-        relativeTime: relativeTime(lastMsg?.createdAt ?? row.updatedAt),
-        updatedAt:    row.updatedAt.toISOString(),
-        unread:       row.unread,
-        contextLabel: row.contextLabel,
-      };
-    });
-  } catch {
-    return [];
-  }
+    return {
+      id:           row.id,
+      senderName,
+      senderInitials: initials,
+      preview:      lastMsg?.content ?? row.topic,
+      relativeTime: relativeTime(lastMsg?.createdAt ?? row.updatedAt),
+      updatedAt:    row.updatedAt.toISOString(),
+      unread:       row.unread,
+      contextLabel: row.contextLabel,
+    };
+  });
 }
 
 // ─── Insights (top 5) ─────────────────────────────────────────────────────────
@@ -418,74 +357,96 @@ export async function GET(): Promise<Response> {
       return Response.json(cached.data);
     }
 
-    // Run all sections with Promise.allSettled
+    // Target: Max 5 DB round trips for the whole route.
+    // 1: Aggregated metrics & counts (single SQL query)
+    // 2: Recent Projects (top 10 to cover both overview list + at-risk alerts)
+    // 3: Recent Insights (top 10 to cover both overview list + critical unread alerts)
+    // 4: Recent Conversations (top 5 with last message)
+    // (User greeting comes directly from verified session.name, zero DB round-trips)
     const [
-      userRes,
-      metricCardsRes,
+      aggregatedCountsRes,
       projectsRes,
       insightsRes,
-      unreadInsightRes,
-      alertsRes,
       conversationsRes,
     ] = await Promise.allSettled([
-      prisma.user.findUnique({
-        where:  { id: session.userId },
-        select: { name: true },
-      }),
-      buildMetricCards(orgId, now),
+      fetchAggregatedCounts(orgId, now),
       prisma.project.findMany({
         where:   { organizationId: orgId },
         orderBy: { updatedAt: "desc" },
-        take:    5,
+        take:    10,
         select:  PROJECT_SELECT,
       }),
       prisma.insight.findMany({
         where:   { organizationId: orgId },
         orderBy: { createdAt: "desc" },
-        take:    5,
+        take:    10,
         select:  INSIGHT_SELECT,
       }),
-      prisma.insight.count({
-        where: { organizationId: orgId, read: false },
+      prisma.conversation.findMany({
+        where:   { organizationId: orgId },
+        orderBy: { updatedAt: "desc" },
+        take:    5,
+        select: {
+          id:           true,
+          topic:        true,
+          contextLabel: true,
+          rfLead:       true,
+          unread:       true,
+          updatedAt:    true,
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take:    1,
+            select:  {
+              content:   true,
+              createdAt: true,
+              sender: { select: { name: true, avatarInitials: true } },
+            },
+          },
+        },
       }),
-      buildAlerts(orgId),
-      buildRecentConversations(orgId),
     ]);
 
-    const metricResult = metricCardsRes.status === "fulfilled" ? metricCardsRes.value : null;
-    const metricCards = metricResult?.cards ?? [];
-    const countErrors = metricResult?.countErrors;
+    const countsData = aggregatedCountsRes.status === "fulfilled" ? aggregatedCountsRes.value : null;
+    const metricCards = countsData?.cards ?? [];
+    const unreadInsightCount = countsData?.counts ? Number(countsData.counts.unread_insights ?? 0) : 0;
 
+    const rawProjects = projectsRes.status === "fulfilled" ? projectsRes.value : [];
+    const rawInsights = insightsRes.status === "fulfilled" ? insightsRes.value : [];
+    const rawConversations = conversationsRes.status === "fulfilled" ? conversationsRes.value : [];
+
+    // Derive alerts in-memory from fetched lists without additional round-trips
+    const atRiskProjects = rawProjects
+      .filter((p) => p.status === "AT_RISK" || p.status === "BLOCKED")
+      .slice(0, 3);
+    const criticalInsights = rawInsights
+      .filter((i) => i.severity === "CRITICAL" && !i.read && (!i.actions || i.actions.length === 0 || !["DISMISSED", "ACCEPTED"].includes(i.actions[0].actionStatus)))
+      .slice(0, 3);
+    const alerts = formatAlerts(atRiskProjects, criticalInsights);
+
+    const countsFailed = aggregatedCountsRes.status === "rejected";
     const errors: Record<string, any> = {
       projects: projectsRes.status === "rejected",
       insights: insightsRes.status === "rejected",
-      metrics: metricCardsRes.status === "rejected",
-      alerts: alertsRes.status === "rejected",
+      metrics: countsFailed,
+      alerts: projectsRes.status === "rejected" || insightsRes.status === "rejected",
       conversations: conversationsRes.status === "rejected",
-      counts: countErrors ?? {
-        projects: metricCardsRes.status === "rejected",
-        conversations: metricCardsRes.status === "rejected",
-        insights: metricCardsRes.status === "rejected",
-        renewal: metricCardsRes.status === "rejected",
-        team: metricCardsRes.status === "rejected",
+      counts: {
+        projects: countsFailed,
+        conversations: countsFailed,
+        insights: countsFailed,
+        renewal: countsFailed,
+        team: countsFailed,
       },
     };
 
-    const user = userRes.status === "fulfilled" ? userRes.value : null;
-    const rawProjects = projectsRes.status === "fulfilled" ? projectsRes.value : [];
-    const rawInsights = insightsRes.status === "fulfilled" ? insightsRes.value : [];
-    const unreadInsightCount = unreadInsightRes.status === "fulfilled" ? unreadInsightRes.value : 0;
-    const alerts = alertsRes.status === "fulfilled" ? alertsRes.value : [];
-    const recentConversations = conversationsRes.status === "fulfilled" ? conversationsRes.value : [];
-
     const payload: DashboardData = {
-      userName:           user?.name ?? session.name ?? "there",
+      userName:           session.name || "there",
       metricCards,
-      projects:           rawProjects.map((p) => serializeProject(p as ProjectRow)),
-      insights:           rawInsights.map((r) => serializeInsight(r as RawInsight)),
+      projects:           rawProjects.slice(0, 5).map((p) => serializeProject(p as ProjectRow)),
+      insights:           rawInsights.slice(0, 5).map((r) => serializeInsight(r as RawInsight)),
       unreadInsightCount,
       alerts,
-      recentConversations,
+      recentConversations: formatRecentConversations(rawConversations as RawConvRow[]),
       errors,
     };
 

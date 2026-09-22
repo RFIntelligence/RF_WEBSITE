@@ -1,1 +1,1 @@
-export { prisma } from "@rf-intelligence/db";
+export { prisma, Prisma } from "@rf-intelligence/db";
