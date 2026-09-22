@@ -155,7 +155,7 @@ export function AnimatedAIChat({
   });
 
   const promptChips = [
-    "List my team members",
+    "What are our top critical risks?",
     "Which accounts are at risk?",
     "Summarize recent project activity",
   ];
