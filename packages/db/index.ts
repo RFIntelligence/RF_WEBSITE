@@ -35,19 +35,24 @@ function createPrismaClient(): PrismaClient {
     }
   }
 
+  const debugQueries = process.env.DEBUG_PRISMA_QUERIES === "true";
+
   const client = new PrismaClient({
     datasourceUrl: databaseUrl,
-    log: isDev
+    log: debugQueries
       ? [
           { emit: "event", level: "query" },
           { emit: "stdout", level: "warn" },
           { emit: "stdout", level: "error" },
         ]
-      : ["error"],
+      : [
+          { emit: "stdout", level: "warn" },
+          { emit: "stdout", level: "error" },
+        ],
   });
 
-  if (isDev) {
-    // Event-based query logging with durations, no query params printed
+  if (debugQueries) {
+    // Event-based query logging with durations, enabled only when DEBUG_PRISMA_QUERIES=true
     (client as any).$on("query", (e: any) => {
       console.log(`[PRISMA QUERY] ${e.query.slice(0, 100)}... duration: ${e.duration}ms`);
     });
@@ -62,4 +67,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
+// Note: Re-exporting from @prisma/client is required across the monorepo.
+// The "unexpected export *" notice is a known Turbopack/Next.js bundler warning
+// for CJS interop that does not affect runtime execution.
 export * from "@prisma/client";
