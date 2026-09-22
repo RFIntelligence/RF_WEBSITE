@@ -15,10 +15,10 @@ function createPrismaClient(): PrismaClient {
   if (databaseUrl && !databaseUrl.startsWith("file:")) {
     try {
       const u = new URL(databaseUrl);
-      // Prisma's Rust query engine treats `pgbouncer=true` by forcing a BEGIN -> DEALLOCATE ALL -> query -> COMMIT wrapper
-      // on EVERY query to prevent prepared statement leaks in transaction poolers.
-      // Removing pgbouncer=true eliminates this 4x round-trip overhead for queries while keeping direct execution.
-      u.searchParams.delete("pgbouncer");
+      // On port 6543 (PgBouncer transaction mode), pgbouncer=true tells Prisma not to reuse prepared statements across transactions.
+      if (!u.searchParams.has("pgbouncer") && u.port === "6543") {
+        u.searchParams.set("pgbouncer", "true");
+      }
 
       if (!u.searchParams.has("connection_limit")) {
         u.searchParams.set("connection_limit", isDev ? "5" : "10");
