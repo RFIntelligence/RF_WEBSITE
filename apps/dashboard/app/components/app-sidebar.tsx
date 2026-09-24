@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
+  Package,
   Sparkles,
   MessageCircleQuestion,
   MessagesSquare,
@@ -38,6 +39,11 @@ const NAV_ITEMS = [
     label: "Projects",
     href: "/projects",
     icon: FolderKanban,
+  },
+  {
+    label: "Inventory",
+    href: "/inventory",
+    icon: Package,
   },
   {
     label: "AI Insights",

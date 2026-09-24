@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -20,8 +20,10 @@ function createPrismaClient(): PrismaClient {
         u.searchParams.set("pgbouncer", "true");
       }
 
+      // Maintain a sensible connection pool size (10 in dev, 20 in prod) so concurrent
+      // requests in Next.js do not block on connection pool acquisition.
       if (!u.searchParams.has("connection_limit")) {
-        u.searchParams.set("connection_limit", isDev ? "5" : "10");
+        u.searchParams.set("connection_limit", isDev ? "10" : "20");
       }
       if (!u.searchParams.has("pool_timeout")) {
         u.searchParams.set("pool_timeout", "30");
@@ -67,7 +69,37 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-// Note: Re-exporting from @prisma/client is required across the monorepo.
-// The "unexpected export *" notice is a known Turbopack/Next.js bundler warning
-// for CJS interop that does not affect runtime execution.
-export * from "@prisma/client";
+export { PrismaClient, Prisma } from "@prisma/client";
+
+// Named model type exports — avoids "unexpected export *" Turbopack warning
+// for CJS interop with @prisma/client.
+export type {
+  Organization,
+  User,
+  Project,
+  ProjectActivity,
+  Insight,
+  InsightAction,
+  Task,
+  Document,
+  Report,
+  Conversation,
+  Message,
+  Notification,
+  NotificationPreference,
+  AskRfQuery,
+  AuditLog,
+  Invitation,
+  PrismaPromise,
+} from "@prisma/client";
+export {
+  Role,
+  ProjectStatus,
+  InsightType,
+  InsightSeverity,
+  InsightActionStatus,
+  TaskStatus,
+  DocumentProcessingStatus,
+  ReportStatus,
+  InvitationStatus,
+} from "@prisma/client";
