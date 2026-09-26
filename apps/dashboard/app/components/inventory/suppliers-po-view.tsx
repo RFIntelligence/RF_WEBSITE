@@ -116,9 +116,9 @@ export function SuppliersPOView({
     const query = poSearch.toLowerCase().trim();
     const matchesQuery =
       !query ||
-      po.poNumber.toLowerCase().includes(query) ||
+      (po.poNumber ?? "").toLowerCase().includes(query) ||
       (supp?.name ?? "").toLowerCase().includes(query) ||
-      po.createdByName.toLowerCase().includes(query);
+      (po.createdByName ?? "").toLowerCase().includes(query);
     return matchesStatus && matchesQuery;
   });
 
@@ -305,7 +305,7 @@ export function SuppliersPOView({
                       <div className="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                         <span className="flex items-center gap-1">
                           <Calendar className="size-3" />
-                          Delivery: {new Date(po.expectedDeliveryDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          Delivery: {po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "TBD"}
                         </span>
                         {po.sentAt && (
                           <span className="flex items-center gap-1 text-[var(--accent)]">
@@ -381,7 +381,7 @@ export function SuppliersPOView({
 
                     <div className="flex items-center gap-1 text-amber-400 font-mono text-xs font-bold bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
                       <Star className="size-3 fill-amber-400" />
-                      {supp.rating.toFixed(1)}
+                      {(supp.rating ?? 4.8).toFixed(1)}
                     </div>
                   </div>
 
@@ -709,13 +709,13 @@ function ReceivePOModal({
   const [receiveQtys, setReceiveQtys] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     po.items.forEach((line) => {
-      map[line.itemId] = Math.max(0, line.quantity - line.receivedQuantity);
+      map[line.itemId] = Math.max(0, line.quantity - (line.receivedQuantity ?? 0));
     });
     return map;
   });
 
   const [receiverName, setReceiverName] = useState("Alex Rivera");
-  const [targetLocationId, setTargetLocationId] = useState(po.targetLocationId);
+  const [targetLocationId, setTargetLocationId] = useState(po.targetLocationId ?? locations[0]?.id ?? "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -760,7 +760,7 @@ function ReceivePOModal({
             </label>
             {po.items.map((line) => {
               const itemObj = items.find((i) => i.id === line.itemId);
-              const remaining = line.quantity - line.receivedQuantity;
+              const remaining = line.quantity - (line.receivedQuantity ?? 0);
 
               return (
                 <div

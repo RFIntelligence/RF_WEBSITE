@@ -164,6 +164,7 @@ function NotificationBell() {
         <button
           type="button"
           aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+          suppressHydrationWarning
           className="relative flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
         >
           <Bell aria-hidden className="size-4" />
@@ -264,6 +265,7 @@ function UserMenu() {
         <button
           type="button"
           aria-label="User menu"
+          suppressHydrationWarning
           className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm outline-none transition-colors hover:bg-[var(--surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
         >
           <Avatar className="h-7 w-7">

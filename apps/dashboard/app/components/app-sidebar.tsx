@@ -240,6 +240,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               type="button"
               onClick={() => void handleLogout()}
               disabled={loggingOut}
+              suppressHydrationWarning
               className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-rose-400 outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] disabled:opacity-40"
             >
               <LogOut aria-hidden className="size-4 shrink-0" />
@@ -252,6 +253,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             type="button"
             onClick={onToggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            suppressHydrationWarning
             className={cn(
               "mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
               collapsed && "justify-center"

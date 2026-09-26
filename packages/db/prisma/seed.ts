@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient({
+  datasources: dbUrl ? { db: { url: dbUrl } } : undefined,
+});
 
 async function main() {
   console.log("🌱 Starting Database Seed with Part 1 Demo Data...");
@@ -413,6 +416,599 @@ async function main() {
     ],
   });
   console.log("✓ Notifications created");
+
+  // 8. Create Inventory Seed Data (RF / Electronics Hardware)
+  console.log("📦 Creating RF & Electronics Hardware Inventory Seed Data...");
+
+  const catAntennas = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Antennas & RF Modules",
+      description: "High-gain antennas, RF feeds, and directional arrays",
+    },
+  });
+
+  const catSemis = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Semiconductors & ICs",
+      description: "Microcontrollers, RF mixers, and GaN power transistors",
+    },
+  });
+
+  const catCables = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Cables & Connectors",
+      description: "Low-loss coaxial cables, SMA, N-type, and BNC connectors",
+    },
+  });
+
+  const catPower = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Power Supplies & Batteries",
+      description: "Linear bench supplies, DC-DC converters, and Li-ion battery packs",
+    },
+  });
+
+  const catSensors = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Sensors & Transceivers",
+      description: "LoRa nodes, SDR modules, radar detectors, and telemetry kits",
+    },
+  });
+
+  const catPCBs = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "PCBs & Development Boards",
+      description: "Prototype boards, FPGA evaluation kits, and single-board computers",
+    },
+  });
+
+  const catNetwork = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Networking Equipment",
+      description: "Industrial Ethernet switches, PoE injectors, and fiber transceivers",
+    },
+  });
+
+  const catEnclosures = await prisma.inventoryCategory.create({
+    data: {
+      organizationId: org.id,
+      name: "Enclosures & Mounting Hardware",
+      description: "IP67 weatherized enclosures, mast clamps, and DIN rail brackets",
+    },
+  });
+
+  const locHub = await prisma.inventoryLocation.create({
+    data: {
+      organizationId: org.id,
+      name: "Main Dark Store Hub (Austin)",
+      code: "AUS-HUB-01",
+      address: "100 Innovation Way, Austin, TX",
+      isPrimary: true,
+    },
+  });
+
+  const locExpress = await prisma.inventoryLocation.create({
+    data: {
+      organizationId: org.id,
+      name: "Express Pod Downtown",
+      code: "AUS-EXP-02",
+      address: "45 Congress Ave, Austin, TX",
+      isPrimary: false,
+    },
+  });
+
+  const seedNow = new Date();
+  const daysFromNow = (days: number) => new Date(seedNow.getTime() + days * 86_400_000);
+
+  const seedItems = [
+    // 1. Antennas & RF Modules
+    {
+      sku: "ANT-58G-DIR",
+      name: "5.8GHz Directional Panel Antenna 18dBi",
+      categoryId: catAntennas.id,
+      unit: "UNITS" as const,
+      costPrice: 85.00,
+      unitPrice: 149.99,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 42, // HEALTHY
+      description: "Weatherproof high-gain directional antenna for long-range point-to-point links.",
+    },
+    {
+      sku: "ANT-24G-OMNI",
+      name: "2.4GHz Omni-Directional Base Antenna 9dBi",
+      categoryId: catAntennas.id,
+      unit: "UNITS" as const,
+      costPrice: 38.00,
+      unitPrice: 69.50,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 12, // LOW (<= 20)
+      description: "Fiberglass outdoor omni antenna with integrated N-type female connector.",
+    },
+    {
+      sku: "ANT-915M-YAGI",
+      name: "915MHz 8-Element Yagi Array",
+      categoryId: catAntennas.id,
+      unit: "UNITS" as const,
+      costPrice: 52.00,
+      unitPrice: 94.00,
+      reorderPoint: 10,
+      targetStock: 40,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "ISM band directional Yagi optimized for telemetry and smart meter backhaul.",
+    },
+    {
+      sku: "RF-AMP-PA50W",
+      name: "50W GaN High-Power RF Amplifier Module",
+      categoryId: catAntennas.id,
+      unit: "UNITS" as const,
+      costPrice: 850.00,
+      unitPrice: 1380.00,
+      reorderPoint: 5,
+      targetStock: 20,
+      expiryTrackingEnabled: true,
+      onHand: 6, // EXPIRING (calibration expires in 20 days)
+      expiryDays: 20,
+      description: "High-efficiency 2.4-6GHz power amplifier with calibrated thermal protection.",
+    },
+    {
+      sku: "RF-DIP-SDR",
+      name: "Dual-Band Cavity Diplexer 1.2/2.4GHz",
+      categoryId: catAntennas.id,
+      unit: "UNITS" as const,
+      costPrice: 120.00,
+      unitPrice: 210.00,
+      reorderPoint: 8,
+      targetStock: 30,
+      expiryTrackingEnabled: false,
+      onHand: 45, // OVERSTOCKED (> 30)
+      description: "Low insertion loss cavity filter for simultaneous multi-channel transmit/receive.",
+    },
+
+    // 2. Semiconductors & ICs
+    {
+      sku: "IC-ESP32-WROOM",
+      name: "ESP32-WROOM-32D Dual-Core WiFi/BLE Module",
+      categoryId: catSemis.id,
+      unit: "PCS" as const,
+      costPrice: 2.10,
+      unitPrice: 4.85,
+      reorderPoint: 100,
+      targetStock: 500,
+      expiryTrackingEnabled: false,
+      onHand: 350, // HEALTHY
+      description: "Industry-standard IoT SoC module with PCB antenna and 4MB flash.",
+    },
+    {
+      sku: "IC-STM32F4-MCU",
+      name: "STM32F405RG Cortex-M4 Microcontroller LQFP-64",
+      categoryId: catSemis.id,
+      unit: "PCS" as const,
+      costPrice: 6.20,
+      unitPrice: 11.50,
+      reorderPoint: 50,
+      targetStock: 250,
+      expiryTrackingEnabled: false,
+      onHand: 32, // LOW (<= 50)
+      description: "168MHz MCU with DSP, FPU, 1MB flash, and advanced communication interfaces.",
+    },
+    {
+      sku: "IC-LNA-RFMIX",
+      name: "Ultra-Low-Noise Preamplifier MMIC 0.1-6GHz",
+      categoryId: catSemis.id,
+      unit: "PCS" as const,
+      costPrice: 14.50,
+      unitPrice: 26.00,
+      reorderPoint: 40,
+      targetStock: 200,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "High linearity GaAs PHEMT amplifier with sub-0.8dB noise figure.",
+    },
+    {
+      sku: "IC-LORA-SX1262",
+      name: "Semtech SX1262 Sub-GHz LoRa Transceiver IC",
+      categoryId: catSemis.id,
+      unit: "PCS" as const,
+      costPrice: 3.40,
+      unitPrice: 6.90,
+      reorderPoint: 60,
+      targetStock: 300,
+      expiryTrackingEnabled: false,
+      onHand: 240, // HEALTHY
+      description: "+22dBm output power long-range transceiver IC for worldwide ISM bands.",
+    },
+
+    // 3. Cables & Connectors
+    {
+      sku: "CBL-RG58-1M",
+      name: "RG58 Low-Loss Coaxial Cable (SMA-Male to SMA-Male 1m)",
+      categoryId: catCables.id,
+      unit: "PCS" as const,
+      costPrice: 6.50,
+      unitPrice: 14.99,
+      reorderPoint: 25,
+      targetStock: 100,
+      expiryTrackingEnabled: false,
+      onHand: 78, // HEALTHY
+      description: "Double-shielded 50-ohm flexible RF jumper cable assembly with gold-plated connectors.",
+    },
+    {
+      sku: "CBL-LMR400-5M",
+      name: "LMR-400 Ultra-Low-Loss Feed Cable 5m (N-Male to SMA-Male)",
+      categoryId: catCables.id,
+      unit: "PCS" as const,
+      costPrice: 32.00,
+      unitPrice: 59.00,
+      reorderPoint: 15,
+      targetStock: 50,
+      expiryTrackingEnabled: false,
+      onHand: 9, // LOW (<= 15)
+      description: "Heavy-duty outdoor antenna feeder line with low attenuation up to 6GHz.",
+    },
+    {
+      sku: "CON-SMA-BULK",
+      name: "SMA Female to Female Panel-Mount Bulkhead Barrel (10-pack)",
+      categoryId: catCables.id,
+      unit: "PACKS" as const,
+      costPrice: 11.00,
+      unitPrice: 22.50,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 110, // OVERSTOCKED (> 80)
+      description: "Precision brass gold-plated chassis adapter with silicone O-ring seal.",
+    },
+    {
+      sku: "CON-N-MALE-CRIMP",
+      name: "N-Type Male Clamp Connector for RG213",
+      categoryId: catCables.id,
+      unit: "PCS" as const,
+      costPrice: 4.80,
+      unitPrice: 9.75,
+      reorderPoint: 30,
+      targetStock: 120,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "Weather-resistant RF coaxial plug connector rated to 11GHz.",
+    },
+
+    // 4. Power Supplies & Batteries
+    {
+      sku: "PWR-12V5A-DIN",
+      name: "12V 5A Industrial DIN-Rail Power Supply 60W",
+      categoryId: catPower.id,
+      unit: "UNITS" as const,
+      costPrice: 24.00,
+      unitPrice: 44.90,
+      reorderPoint: 12,
+      targetStock: 50,
+      expiryTrackingEnabled: false,
+      onHand: 35, // HEALTHY
+      description: "Universal AC input DIN mount supply with short-circuit and over-voltage protection.",
+    },
+    {
+      sku: "BAT-18650-CELL",
+      name: "18650 Li-Ion Rechargeable Battery Cell 3500mAh (4-pack)",
+      categoryId: catPower.id,
+      unit: "PACKS" as const,
+      costPrice: 14.00,
+      unitPrice: 28.00,
+      reorderPoint: 25,
+      targetStock: 100,
+      expiryTrackingEnabled: true,
+      onHand: 18, // EXPIRING (storage expiration in 14 days)
+      expiryDays: 14,
+      description: "High-capacity grade-A lithium-ion cells for mobile sensor nodes.",
+    },
+    {
+      sku: "PWR-DCDC-STEPDN",
+      name: "Wide-Input DC-DC Buck Converter 36V-72V to 12V 10A",
+      categoryId: catPower.id,
+      unit: "UNITS" as const,
+      costPrice: 19.50,
+      unitPrice: 38.00,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 5, // LOW
+      description: "Sealed aluminum enclosure converter designed for telecom battery banks.",
+    },
+    {
+      sku: "PWR-POE-INJ30W",
+      name: "Gigabit PoE+ Injector 802.3at 30W",
+      categoryId: catPower.id,
+      unit: "UNITS" as const,
+      costPrice: 16.00,
+      unitPrice: 31.50,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 48, // HEALTHY
+      description: "Midspan power injector for outdoor access points and IP cameras.",
+    },
+
+    // 5. Sensors & Transceivers
+    {
+      sku: "SNS-LORA-NODE",
+      name: "LoRaWAN Environmental Telemetry Node IP67",
+      categoryId: catSensors.id,
+      unit: "UNITS" as const,
+      costPrice: 65.00,
+      unitPrice: 119.00,
+      reorderPoint: 10,
+      targetStock: 40,
+      expiryTrackingEnabled: false,
+      onHand: 26, // HEALTHY
+      description: "Integrated temperature, humidity, pressure, and battery telemetry station.",
+    },
+    {
+      sku: "TRX-SDR-HACKRF",
+      name: "Software Defined Radio Transceiver 1MHz-6GHz Kit",
+      categoryId: catSensors.id,
+      unit: "UNITS" as const,
+      costPrice: 180.00,
+      unitPrice: 299.00,
+      reorderPoint: 6,
+      targetStock: 25,
+      expiryTrackingEnabled: false,
+      onHand: 4, // LOW (<= 6)
+      description: "Half-duplex SDR development platform with TCXO clock and telescopic antenna.",
+    },
+    {
+      sku: "SNS-RADAR-24G",
+      name: "24GHz FMCW Doppler Radar Velocity Sensor",
+      categoryId: catSensors.id,
+      unit: "UNITS" as const,
+      costPrice: 42.00,
+      unitPrice: 79.50,
+      reorderPoint: 10,
+      targetStock: 40,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "Micro-power motion and velocity sensing module with UART / RS485 output.",
+    },
+    {
+      sku: "SNS-PIR-IND",
+      name: "Industrial Quad-Element PIR Motion Detector",
+      categoryId: catSensors.id,
+      unit: "PCS" as const,
+      costPrice: 9.20,
+      unitPrice: 18.50,
+      reorderPoint: 30,
+      targetStock: 120,
+      expiryTrackingEnabled: false,
+      onHand: 85, // HEALTHY
+      description: "Hardened perimeter intruder detection sensor with pet immunity.",
+    },
+
+    // 6. PCBs & Development Boards
+    {
+      sku: "DEV-RPI-4B-4G",
+      name: "Raspberry Pi 4 Model B (4GB RAM Single Board Computer)",
+      categoryId: catPCBs.id,
+      unit: "UNITS" as const,
+      costPrice: 45.00,
+      unitPrice: 65.00,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 55, // HEALTHY
+      description: "Quad-core Cortex-A72 SoC with dual 4K micro-HDMI, Gigabit Ethernet, and USB 3.0.",
+    },
+    {
+      sku: "DEV-FPGA-ARTIX7",
+      name: "Xilinx Artix-7 FPGA DSP Evaluation Board",
+      categoryId: catPCBs.id,
+      unit: "UNITS" as const,
+      costPrice: 210.00,
+      unitPrice: 349.00,
+      reorderPoint: 5,
+      targetStock: 20,
+      expiryTrackingEnabled: false,
+      onHand: 3, // LOW (<= 5)
+      description: "100K logic cell FPGA board with DDR3 RAM, FMC connector, and Gigabit Ethernet.",
+    },
+    {
+      sku: "PCB-PROTO-4LAY",
+      name: "4-Layer RF Breadboard Prototyping PCB (Pack of 5)",
+      categoryId: catPCBs.id,
+      unit: "PACKS" as const,
+      costPrice: 8.50,
+      unitPrice: 17.90,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "Controlled impedance FR4 substrate prototype board with ground plane shielding.",
+    },
+    {
+      sku: "DEV-NUCLEO-144",
+      name: "STM32 Nucleo-144 Development Board (F767ZI)",
+      categoryId: catPCBs.id,
+      unit: "UNITS" as const,
+      costPrice: 28.00,
+      unitPrice: 48.00,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 95, // OVERSTOCKED (> 60)
+      description: "ARM Cortex-M7 board with on-board ST-LINK debugger and Ethernet PHY.",
+    },
+
+    // 7. Networking Equipment
+    {
+      sku: "NET-SW-POE8",
+      name: "8-Port Gigabit Industrial Managed PoE+ Switch",
+      categoryId: catNetwork.id,
+      unit: "UNITS" as const,
+      costPrice: 140.00,
+      unitPrice: 235.00,
+      reorderPoint: 8,
+      targetStock: 30,
+      expiryTrackingEnabled: false,
+      onHand: 19, // HEALTHY
+      description: "Ruggedized fanless DIN-rail switch with 2 SFP fiber uplink ports.",
+    },
+    {
+      sku: "NET-SFP-10G-SR",
+      name: "10GBASE-SR SFP+ 850nm Multi-Mode Optical Transceiver",
+      categoryId: catNetwork.id,
+      unit: "PCS" as const,
+      costPrice: 22.00,
+      unitPrice: 42.00,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 14, // LOW (<= 20)
+      description: "Hot-pluggable optical transceiver supporting up to 300m link lengths over OM3 fiber.",
+    },
+    {
+      sku: "NET-ROUTER-CELL",
+      name: "4G/5G Cellular Gateway Router with Dual SIM & GPS",
+      categoryId: catNetwork.id,
+      unit: "UNITS" as const,
+      costPrice: 260.00,
+      unitPrice: 420.00,
+      reorderPoint: 5,
+      targetStock: 25,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "Mission-critical IoT field router with failover IPsec VPN and GPS tracking.",
+    },
+    {
+      sku: "NET-FIBER-LC10M",
+      name: "Armored Tactical Fiber Optic Patch Cable 10m (Duplex LC)",
+      categoryId: catNetwork.id,
+      unit: "PCS" as const,
+      costPrice: 18.00,
+      unitPrice: 36.00,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 44, // HEALTHY
+      description: "Crush-resistant stainless steel armored multi-mode patch cable.",
+    },
+
+    // 8. Enclosures & Mounting Hardware
+    {
+      sku: "ENC-IP67-ALUM",
+      name: "Die-Cast Aluminum Weatherproof Enclosure 220x165x85mm",
+      categoryId: catEnclosures.id,
+      unit: "UNITS" as const,
+      costPrice: 28.00,
+      unitPrice: 52.00,
+      reorderPoint: 15,
+      targetStock: 60,
+      expiryTrackingEnabled: false,
+      onHand: 38, // HEALTHY
+      description: "EMI/RFI shielded waterproof enclosure box with silicone gasket and mounting lugs.",
+    },
+    {
+      sku: "MNT-MAST-CLAMP",
+      name: "Heavy-Duty Antenna Mast Mounting Bracket Kit (35-65mm)",
+      categoryId: catEnclosures.id,
+      unit: "PACKS" as const,
+      costPrice: 12.50,
+      unitPrice: 24.90,
+      reorderPoint: 20,
+      targetStock: 80,
+      expiryTrackingEnabled: false,
+      onHand: 16, // LOW (<= 20)
+      description: "Galvanized steel V-jaw clamp bracket for pole, mast, and tower installations.",
+    },
+    {
+      sku: "MNT-DIN-KIT",
+      name: "Aluminum DIN-Rail Mounting Clips with Hardware (Pack of 10)",
+      categoryId: catEnclosures.id,
+      unit: "PACKS" as const,
+      costPrice: 7.00,
+      unitPrice: 15.00,
+      reorderPoint: 25,
+      targetStock: 100,
+      expiryTrackingEnabled: false,
+      onHand: 0, // OUT
+      description: "Quick-release spring-loaded 35mm top-hat DIN rail mounting brackets.",
+    },
+    {
+      sku: "ENC-VENT-PLUG",
+      name: "Hydrophobic PTFE Pressure Equalization Vent Plug M12",
+      categoryId: catEnclosures.id,
+      unit: "PCS" as const,
+      costPrice: 2.20,
+      unitPrice: 5.50,
+      reorderPoint: 50,
+      targetStock: 200,
+      expiryTrackingEnabled: false,
+      onHand: 240, // OVERSTOCKED (> 200)
+      description: "Breather element that prevents internal condensation and pressure buildup.",
+    },
+  ];
+
+  for (const s of seedItems) {
+    const item = await prisma.inventoryItem.create({
+      data: {
+        organizationId: org.id,
+        sku: s.sku,
+        name: s.name,
+        categoryId: s.categoryId,
+        unit: s.unit,
+        costPrice: s.costPrice,
+        unitPrice: s.unitPrice,
+        reorderPoint: s.reorderPoint,
+        targetStock: s.targetStock,
+        expiryTrackingEnabled: s.expiryTrackingEnabled,
+        description: s.description,
+      },
+    });
+
+    if (s.onHand > 0) {
+      await prisma.inventoryStockLevel.create({
+        data: {
+          itemId: item.id,
+          locationId: locHub.id,
+          onHand: s.onHand,
+          reserved: 0,
+        },
+      });
+
+      await prisma.inventoryMovement.create({
+        data: {
+          organizationId: org.id,
+          itemId: item.id,
+          locationId: locHub.id,
+          type: "RECEIPT",
+          quantity: s.onHand,
+          reason: "VENDOR_RESTOCK",
+          reference: "SEED-INIT-001",
+          performedById: jordan.id,
+        },
+      });
+
+      if (s.expiryTrackingEnabled && s.expiryDays) {
+        await prisma.inventoryBatch.create({
+          data: {
+            itemId: item.id,
+            batchCode: `BATCH-${s.sku}-01`,
+            quantity: s.onHand,
+            expiryDate: daysFromNow(s.expiryDays),
+          },
+        });
+      }
+    }
+  }
+  console.log(`✓ Created ${seedItems.length} RF & Electronics inventory items across 8 categories with initial stock and movements`);
 
   console.log("🎉 Database seeding completed successfully!");
 }

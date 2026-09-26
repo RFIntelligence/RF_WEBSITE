@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -79,6 +80,12 @@ model Organization {
   askRfQueries            AskRfQuery[]
   auditLogs               AuditLog[]
   invitations             Invitation[]
+  inventoryCategories     InventoryCategory[]
+  inventoryLocations      InventoryLocation[]
+  inventoryItems          InventoryItem[]
+  inventoryMovements      InventoryMovement[]
+  suppliers               Supplier[]
+  purchaseOrders          PurchaseOrder[]
 
   @@map("organizations")
 }
@@ -108,6 +115,7 @@ model User {
   askRfQueries           AskRfQuery[]
   auditLogs              AuditLog[]
   sentInvitations        Invitation[]
+  inventoryMovements     InventoryMovement[]
 
   @@map("users")
 }
@@ -404,3 +412,191 @@ model Invitation {
   @@index([token])
   @@map("invitations")
 }
+
+// ─── Inventory Management Models ─────────────────────────────────────────────
+
+model InventoryCategory {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  items          InventoryItem[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("inventory_categories")
+}
+
+model InventoryLocation {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+  address        String?
+  isPrimary      Boolean             @default(false)
+  stockLevels    InventoryStockLevel[]
+  movements      InventoryMovement[]
+  createdAt      DateTime            @default(now())
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("inventory_locations")
+}
+
+model InventoryItem {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sku                   String
+  barcode               String?
+  name                  String
+  categoryId            String?
+  category              InventoryCategory?  @relation(fields: [categoryId], references: [id])
+  unit                  InventoryUnit
+  costPrice             Decimal             @db.Decimal(10, 2)
+  unitPrice             Decimal             @db.Decimal(10, 2)
+  reorderPoint          Int                 @default(0)
+  targetStock           Int                 @default(0)
+  expiryTrackingEnabled Boolean             @default(false)
+  description           String?
+  isActive              Boolean             @default(true)
+  stockLevels           InventoryStockLevel[]
+  movements             InventoryMovement[]
+  batches               InventoryBatch[]
+  purchaseOrderItems    PurchaseOrderItem[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@unique([organizationId, sku])
+  @@index([organizationId])
+  @@index([organizationId, categoryId])
+  @@map("inventory_items")
+}
+
+model InventoryBatch {
+  id         String        @id @default(cuid())
+  itemId     String
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  batchCode  String?
+  quantity   Int
+  expiryDate DateTime?
+  receivedAt DateTime      @default(now())
+
+  @@index([itemId])
+  @@index([expiryDate])
+  @@map("inventory_batches")
+}
+
+model InventoryStockLevel {
+  id         String            @id @default(cuid())
+  itemId     String
+  item       InventoryItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  locationId String
+  location   InventoryLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  onHand     Int               @default(0)
+  reserved   Int               @default(0)
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([itemId, locationId])
+  @@index([locationId])
+  @@map("inventory_stock_levels")
+}
+
+model InventoryMovement {
+  id             String                @id @default(cuid())
+  organizationId String
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  itemId         String
+  item           InventoryItem         @relation(fields: [itemId], references: [id])
+  locationId     String
+  location       InventoryLocation     @relation(fields: [locationId], references: [id])
+  type           InventoryMovementType
+  quantity       Int
+  reason         String?
+  reference      String?
+  notes          String?
+  performedById  String
+  performedBy    User                  @relation(fields: [performedById], references: [id])
+  timestamp      DateTime              @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([itemId])
+  @@map("inventory_movements")
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplierId     String
+  supplier       Supplier            @relation(fields: [supplierId], references: [id])
+  status         PurchaseOrderStatus @default(DRAFT)
+  items          PurchaseOrderItem[]
+  expectedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            InventoryItem @relation(fields: [itemId], references: [id])
+  quantity        Int
+  unitCost        Decimal       @db.Decimal(10, 2)
+
+  @@index([purchaseOrderId])
+  @@index([itemId])
+  @@map("purchase_order_items")
+}
+
+enum InventoryUnit {
+  PCS
+  KG
+  G
+  PACKS
+  LITRES
+  ML
+  UNITS
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  SHIPMENT
+  TRANSFER
+  ADJUSTMENT
+  RETURN
+  WASTAGE
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+

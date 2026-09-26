@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import useSWR from "swr";
 import {
   Package,
   Search,
@@ -21,6 +22,9 @@ import {
   TrendingUp,
   Building2,
   FileCheck2,
+  ArrowDownRight,
+  ArrowUpRight,
+  AlertCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -34,43 +38,34 @@ import {
 } from "recharts";
 import { cn } from "@/app/lib/utils";
 import {
-  MOCK_ITEMS,
-  MOCK_LOCATIONS,
-  MOCK_STOCK_LEVELS,
-  MOCK_MOVEMENTS,
-  MOCK_SUPPLIERS,
-  MOCK_PURCHASE_ORDERS,
-  InventoryItem,
-  InventoryLocation,
-  StockLevel,
-  InventoryMovement,
-  MovementType,
-  InventoryStatus,
-  Supplier,
-  PurchaseOrder,
-  getItemStatus,
-  getTotalOnHand,
-  getItemTotalValue,
-} from "@/app/lib/mock-inventory-data";
-import {
   ItemDetailSlideover,
   INVENTORY_STATUS_CONFIG,
 } from "@/app/components/inventory/item-detail-slideover";
+import { StockAdjustModal } from "@/app/components/inventory/stock-adjust-modal";
+import { CategoryModal } from "@/app/components/inventory/category-modal";
+import { AddItemSlideover } from "@/app/components/inventory/add-item-slideover";
 import { SuppliersPOView } from "@/app/components/inventory/suppliers-po-view";
+import type { InventoryStatus } from "@/app/lib/inventory-status";
 
-// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+// Standard SWR fetcher
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+};
 
 function InventorySkeleton() {
   return (
     <div className="mx-auto max-w-[1200px] space-y-8 animate-pulse">
-      {/* Header skeleton */}
       <div className="space-y-2">
         <div className="h-3.5 w-24 bg-[var(--surface-elevated)] rounded" />
         <div className="h-8 w-64 sm:w-80 bg-[var(--surface-elevated)] rounded-lg" />
         <div className="h-4 w-96 bg-[var(--surface-elevated)] rounded" />
       </div>
 
-      {/* KPI skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <div
@@ -80,164 +75,89 @@ function InventorySkeleton() {
         ))}
       </div>
 
-      {/* Chart skeleton */}
       <div className="h-64 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]" />
-
-      {/* Table skeleton */}
       <div className="h-80 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)]" />
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function InventoryPage() {
-  const [loading, setLoading] = useState(true);
-
-  // Top level active tab: "STOCK" | "SUPPLIERS_POS"
   const [activeTab, setActiveTab] = useState<"STOCK" | "SUPPLIERS_POS">("STOCK");
 
-  // Core Data in Local State
-  const [items, setItems] = useState<InventoryItem[]>(MOCK_ITEMS);
-  const [locations] = useState<InventoryLocation[]>(MOCK_LOCATIONS);
-  const [stockLevels, setStockLevels] = useState<StockLevel[]>(MOCK_STOCK_LEVELS);
-  const [movements, setMovements] = useState<InventoryMovement[]>(MOCK_MOVEMENTS);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(MOCK_SUPPLIERS);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(MOCK_PURCHASE_ORDERS);
-
-  // Selected item for Slide-Over
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-
-  // Filter & Search states (Stock tab)
+  // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedLocation, setSelectedLocation] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
 
-  // Sorting state (Stock tab)
+  // Sorting state
   const [sortField, setSortField] = useState<"sku" | "name" | "category" | "onHand" | "status" | "price">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Simulate initial load skeleton
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
+  // Modals & Slide-overs
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [adjustingItem, setAdjustingItem] = useState<{
+    id: string;
+    sku: string;
+    name: string;
+    unit: string;
+    onHand: number;
+  } | null>(null);
 
-  // ── Derived KPI Metrics ──
+  // 1. Fetch Categories
+  const { data: catData, mutate: mutateCategories } = useSWR(
+    "/api/inventory/categories",
+    fetcher
+  );
+  const categories = useMemo(() => catData?.categories ?? [], [catData]);
 
-  const totalStockValue = useMemo(() => {
-    return items.reduce((sum, item) => sum + getItemTotalValue(item, stockLevels), 0);
-  }, [items, stockLevels]);
+  // 2. Fetch Locations
+  const { data: locData } = useSWR("/api/inventory/locations", fetcher);
+  const locations = useMemo(() => locData?.locations ?? [], [locData]);
 
-  const lowStockCount = useMemo(() => {
-    return items.filter((item) => getItemStatus(item, stockLevels) === "LOW").length;
-  }, [items, stockLevels]);
+  // 3. Fetch Inventory Stats (KPIs + Location Distribution)
+  const { data: statsData, mutate: mutateStats, error: statsError } = useSWR(
+    "/api/inventory/stats",
+    fetcher
+  );
 
-  const deadStockCount = useMemo(() => {
-    const activeItemIds = new Set(movements.map((m) => m.itemId));
-    return items.filter((item) => {
-      const isOver = getItemStatus(item, stockLevels) === "OVERSTOCKED";
-      const isIdle = !activeItemIds.has(item.id);
-      return isOver || isIdle;
-    }).length;
-  }, [items, stockLevels, movements]);
+  // 4. Fetch Suppliers & Purchase Orders
+  const { data: supData, mutate: mutateSuppliers } = useSWR(
+    "/api/inventory/suppliers",
+    fetcher
+  );
+  const suppliers = useMemo(() => supData?.suppliers ?? [], [supData]);
 
-  const expiringSoonCount = useMemo(() => {
-    return items.filter((item) => getItemStatus(item, stockLevels) === "EXPIRING").length;
-  }, [items, stockLevels]);
+  const { data: poData, mutate: mutatePOs } = useSWR(
+    "/api/inventory/purchase-orders",
+    fetcher
+  );
+  const purchaseOrders = useMemo(() => poData?.purchaseOrders ?? [], [poData]);
 
-  // ── Stock By Location Chart Data ──
-  const stockByLocationData = useMemo(() => {
-    return locations.map((loc) => {
-      let healthyCount = 0;
-      let lowCount = 0;
-      let outCount = 0;
-      let valSum = 0;
+  // 5. Fetch Items with filters in SWR key for automatic re-fetching
+  const itemsKey = useMemo(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("search", searchQuery);
+    if (selectedCategory !== "ALL") params.set("categoryId", selectedCategory);
+    if (selectedLocation !== "ALL") params.set("locationId", selectedLocation);
+    if (selectedStatus !== "ALL") params.set("status", selectedStatus);
+    params.set("sort", sortField === "price" ? "unitPrice" : sortField);
+    params.set("order", sortOrder);
+    return `/api/inventory/items?${params.toString()}`;
+  }, [searchQuery, selectedCategory, selectedLocation, selectedStatus, sortField, sortOrder]);
 
-      items.forEach((item) => {
-        const sl = stockLevels.find((s) => s.itemId === item.id && s.locationId === loc.id);
-        const qty = sl?.onHand ?? 0;
-        valSum += qty * item.unitPrice;
+  const {
+    data: itemsData,
+    error: itemsError,
+    isLoading: itemsLoading,
+    mutate: mutateItems,
+  } = useSWR(itemsKey, fetcher, { keepPreviousData: true });
 
-        if (qty === 0) outCount++;
-        else if (qty <= Math.ceil(item.reorderPoint / locations.length)) lowCount++;
-        else healthyCount++;
-      });
+  const items: any[] = useMemo(() => itemsData?.items ?? [], [itemsData]);
 
-      return {
-        location: loc.code,
-        name: loc.name,
-        Healthy: healthyCount,
-        Low: lowCount,
-        Out: outCount,
-        stockValue: Math.round(valSum),
-      };
-    });
-  }, [items, locations, stockLevels]);
-
-  // ── Unique Categories for Filter Dropdown ──
-  const categories = useMemo(() => {
-    const set = new Set(items.map((i) => i.category));
-    return Array.from(set).sort();
-  }, [items]);
-
-  // ── Filtered & Sorted Items ──
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      const query = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !query ||
-        item.name.toLowerCase().includes(query) ||
-        item.sku.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query);
-
-      const matchesCat = selectedCategory === "ALL" || item.category === selectedCategory;
-
-      const itemSt = getItemStatus(item, stockLevels);
-      const matchesStatus = selectedStatus === "ALL" || itemSt === selectedStatus;
-
-      let matchesLoc = true;
-      if (selectedLocation !== "ALL") {
-        const sl = stockLevels.find((s) => s.itemId === item.id && s.locationId === selectedLocation);
-        matchesLoc = (sl?.onHand ?? 0) > 0;
-      }
-
-      return matchesSearch && matchesCat && matchesStatus && matchesLoc;
-    });
-  }, [items, stockLevels, searchQuery, selectedCategory, selectedLocation, selectedStatus]);
-
-  const sortedItems = useMemo(() => {
-    return [...filteredItems].sort((a, b) => {
-      let aVal: string | number = "";
-      let bVal: string | number = "";
-
-      if (sortField === "sku") {
-        aVal = a.sku;
-        bVal = b.sku;
-      } else if (sortField === "name") {
-        aVal = a.name;
-        bVal = b.name;
-      } else if (sortField === "category") {
-        aVal = a.category;
-        bVal = b.category;
-      } else if (sortField === "onHand") {
-        aVal = getTotalOnHand(a.id, stockLevels);
-        bVal = getTotalOnHand(b.id, stockLevels);
-      } else if (sortField === "price") {
-        aVal = a.unitPrice;
-        bVal = b.unitPrice;
-      } else if (sortField === "status") {
-        aVal = getItemStatus(a, stockLevels);
-        bVal = getItemStatus(b, stockLevels);
-      }
-
-      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [filteredItems, sortField, sortOrder, stockLevels]);
-
+  // Handle Sort Toggle
   const handleSortToggle = (field: typeof sortField) => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -247,163 +167,26 @@ export default function InventoryPage() {
     }
   };
 
-  // ── Local State Mutators for Slide-Over ──
-
-  const handleUpdateReorderSettings = (
-    itemId: string,
-    newReorderPoint: number,
-    newTargetStock: number
-  ) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === itemId
-          ? { ...i, reorderPoint: newReorderPoint, targetStock: newTargetStock }
-          : i
-      )
-    );
+  // Optimistic stock adjust callback
+  const handleStockAdjustSuccess = (updatedItem: any) => {
+    // Refresh stats & items
+    void mutateStats();
+    void mutateItems((current: any) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((i: any) =>
+          i.id === updatedItem.id ? { ...i, ...updatedItem } : i
+        ),
+      };
+    }, true);
   };
 
-  const handleRecordMovement = (
-    itemId: string,
-    locationId: string,
-    type: MovementType,
-    quantity: number,
-    reference: string,
-    performedBy: string,
-    notes?: string
-  ) => {
-    const newMovementId = `mov_${Date.now()}`;
-    const timestamp = new Date().toISOString();
+  if (itemsLoading && !itemsData) {
+    return <InventorySkeleton />;
+  }
 
-    const newMov: InventoryMovement = {
-      id: newMovementId,
-      itemId,
-      locationId,
-      type,
-      quantity,
-      reference,
-      timestamp,
-      performedBy,
-      notes,
-    };
-
-    setMovements((prev) => [newMov, ...prev]);
-
-    setStockLevels((prev) => {
-      const existingIdx = prev.findIndex((s) => s.itemId === itemId && s.locationId === locationId);
-      const isAddition = type === "RECEIPT" || type === "RETURN" || (type === "ADJUSTMENT" && quantity > 0);
-      const deltaQty = isAddition ? Math.abs(quantity) : -Math.abs(quantity);
-
-      if (existingIdx >= 0) {
-        const updated = [...prev];
-        const currentSl = updated[existingIdx];
-        const newOnHand = Math.max(0, currentSl.onHand + deltaQty);
-        const newAvail = Math.max(0, newOnHand - currentSl.reserved);
-
-        updated[existingIdx] = {
-          ...currentSl,
-          onHand: newOnHand,
-          available: newAvail,
-          updatedAt: timestamp,
-        };
-        return updated;
-      } else {
-        const newSl: StockLevel = {
-          id: `sl_${itemId}_${locationId}`,
-          itemId,
-          locationId,
-          onHand: Math.max(0, deltaQty),
-          reserved: 0,
-          available: Math.max(0, deltaQty),
-          updatedAt: timestamp,
-        };
-        return [...prev, newSl];
-      }
-    });
-  };
-
-  // ── Local State Mutators for Purchase Orders & Suppliers ──
-
-  const handleSendPO = (poId: string) => {
-    setPurchaseOrders((prev) =>
-      prev.map((po) =>
-        po.id === poId
-          ? {
-              ...po,
-              status: "SENT",
-              sentAt: new Date().toISOString(),
-              createdByName: "Alex Rivera (Approved)",
-            }
-          : po
-      )
-    );
-  };
-
-  const handleCreatePO = (newPOData: Omit<PurchaseOrder, "id">) => {
-    const newPO: PurchaseOrder = {
-      ...newPOData,
-      id: `po_${Date.now()}`,
-    };
-    setPurchaseOrders((prev) => [newPO, ...prev]);
-  };
-
-  const handleReceivePO = (
-    poId: string,
-    receivedItems: { itemId: string; quantityToReceive: number }[],
-    locationId: string,
-    receiverName: string
-  ) => {
-    const timestamp = new Date().toISOString();
-    let targetPoNumber = "";
-
-    // 1. Update Purchase Order Items & Status
-    setPurchaseOrders((prev) =>
-      prev.map((po) => {
-        if (po.id !== poId) return po;
-        targetPoNumber = po.poNumber;
-
-        const updatedItems = po.items.map((line) => {
-          const recMatch = receivedItems.find((r) => r.itemId === line.itemId);
-          const addQty = recMatch ? recMatch.quantityToReceive : 0;
-          return {
-            ...line,
-            receivedQuantity: line.receivedQuantity + addQty,
-          };
-        });
-
-        const isFullyReceived = updatedItems.every(
-          (line) => line.receivedQuantity >= line.quantity
-        );
-
-        return {
-          ...po,
-          items: updatedItems,
-          status: isFullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED",
-        };
-      })
-    );
-
-    // 2. Automatically Update Inventory Stock & Movement Logs for each received item!
-    receivedItems.forEach((rec) => {
-      if (rec.quantityToReceive > 0) {
-        handleRecordMovement(
-          rec.itemId,
-          locationId,
-          "RECEIPT",
-          rec.quantityToReceive,
-          targetPoNumber || `PO-DELIVERY-${poId}`,
-          receiverName,
-          `Received delivery against PO ${targetPoNumber}`
-        );
-      }
-    });
-  };
-
-  const selectedItem = useMemo(() => {
-    return items.find((i) => i.id === selectedItemId) ?? null;
-  }, [items, selectedItemId]);
-
-  if (loading) return <InventorySkeleton />;
+  const stockByLocationData = statsData?.byLocation ?? [];
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-8">
@@ -412,47 +195,63 @@ export default function InventoryPage() {
         <div>
           <p className="dash-eyebrow">/ inventory &amp; procurement</p>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)] mt-1">
-            Warehouse Stock &amp; Supplier Management
+            Warehouse Stock &amp; Dark Store Inventory
           </h1>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Monitor real-time SKU balances, reorder points, AI draft purchase orders, and supplier delivery performance.
+            Monitor real-time SKU balances, reorder points, low stock alerts, and quick stock in/out adjustments.
           </p>
         </div>
 
-        {/* Top-Level Module Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)]">
+        {/* Action Controls & Top Tabs */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("STOCK")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors",
-              activeTab === "STOCK"
-                ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-strong)]"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            )}
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] hover:bg-[var(--surface)] text-xs font-semibold text-[var(--text-primary)] transition-colors"
           >
-            <Package className="size-4 text-[var(--accent)]" />
-            <span>Stock Overview</span>
+            <Layers className="size-3.5 text-[var(--text-muted)]" />
+            <span>Manage Categories</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab("SUPPLIERS_POS")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors",
-              activeTab === "SUPPLIERS_POS"
-                ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-strong)]"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            )}
+            onClick={() => setIsAddItemOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--accent)] text-black text-xs font-bold hover:opacity-90 transition-opacity shadow-sm"
           >
-            <Building2 className="size-4 text-[var(--accent)]" />
-            <span>Suppliers &amp; Purchase Orders</span>
-            {purchaseOrders.filter((p) => p.status === "DRAFT").length > 0 && (
-              <span className="rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 text-[10px] font-mono font-bold">
-                {purchaseOrders.filter((p) => p.status === "DRAFT").length} drafts
-              </span>
-            )}
+            <Plus className="size-3.5" />
+            <span>+ Add Item</span>
           </button>
+
+          {/* Top-Level Module Tabs */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] ml-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("STOCK")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-colors",
+                activeTab === "STOCK"
+                  ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-strong)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <Package className="size-3.5 text-[var(--accent)]" />
+              <span>Stock Overview</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("SUPPLIERS_POS")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-colors",
+                activeTab === "SUPPLIERS_POS"
+                  ? "bg-[var(--surface)] text-[var(--text-primary)] shadow-sm border border-[var(--border-strong)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <Building2 className="size-3.5 text-[var(--accent)]" />
+              <span>Suppliers &amp; POs</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -472,11 +271,11 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold font-mono tracking-tight text-[var(--text-primary)]">
-                  ${totalStockValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${(statsData?.totalStockValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 mt-1">
                   <TrendingUp className="size-3" />
-                  <span>Across {items.length} active SKUs</span>
+                  <span>Across {statsData?.totalSkus ?? items.length} active SKUs</span>
                 </div>
               </div>
             </div>
@@ -492,10 +291,10 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold font-mono tracking-tight text-[var(--text-primary)]">
-                  {lowStockCount} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
+                  {statsData?.lowStockCount ?? 0} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
                 </p>
                 <p className="text-[11px] text-amber-400 font-mono mt-1">
-                  {lowStockCount > 0 ? "Requires reorder PO" : "Stock levels optimal"}
+                  {(statsData?.lowStockCount ?? 0) > 0 ? "Requires restock PO" : "Stock levels optimal"}
                 </p>
               </div>
             </div>
@@ -511,10 +310,10 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold font-mono tracking-tight text-[var(--text-primary)]">
-                  {deadStockCount} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
+                  {statsData?.deadStockCount ?? 0} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
                 </p>
                 <p className="text-[11px] text-[var(--text-muted)] font-mono mt-1">
-                  Idle or excess capacity
+                  Idle (no movement in 60d)
                 </p>
               </div>
             </div>
@@ -530,10 +329,10 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold font-mono tracking-tight text-[var(--text-primary)]">
-                  {expiringSoonCount} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
+                  {statsData?.expiringCount ?? 0} <span className="text-xs text-[var(--text-muted)] font-normal">SKUs</span>
                 </p>
                 <p className="text-[11px] text-purple-400 font-mono mt-1">
-                  Expires within 60 days
+                  Expires within 30 days
                 </p>
               </div>
             </div>
@@ -552,21 +351,21 @@ export default function InventoryPage() {
                 </p>
               </div>
               <div className="flex items-center gap-4 text-xs font-mono text-[var(--text-muted)]">
-                {locations.map((loc) => (
-                  <span key={loc.id} className="flex items-center gap-1.5">
+                {stockByLocationData.map((loc: any) => (
+                  <span key={loc.locationId} className="flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
-                    {loc.name}: <strong className="text-[var(--text-primary)]">${stockByLocationData.find((d) => d.location === loc.code)?.stockValue.toLocaleString()}</strong>
+                    {loc.locationCode}: <strong className="text-[var(--text-primary)]">${loc.stockValue.toLocaleString()}</strong>
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className="h-64 w-full pt-2">
+            <div className="h-56 w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockByLocationData}>
+                <BarChart data={stockByLocationData} barGap={6}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="name" stroke="#888888" fontSize={11} />
-                  <YAxis stroke="#888888" fontSize={11} />
+                  <XAxis dataKey="locationCode" stroke="#71717a" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#18181b",
@@ -576,10 +375,10 @@ export default function InventoryPage() {
                       color: "#fff",
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
-                  <Bar dataKey="Healthy" fill="rgb(16,185,129)" radius={[4, 4, 0, 0]} name="Healthy Stock" />
-                  <Bar dataKey="Low" fill="rgb(245,158,11)" radius={[4, 4, 0, 0]} name="Low Stock" />
-                  <Bar dataKey="Out" fill="rgb(244,63,94)" radius={[4, 4, 0, 0]} name="Out of Stock" />
+                  <Legend />
+                  <Bar dataKey="healthy" fill="rgb(16,185,129)" radius={[4, 4, 0, 0]} name="Healthy Stock" />
+                  <Bar dataKey="low" fill="rgb(245,158,11)" radius={[4, 4, 0, 0]} name="Low Stock" />
+                  <Bar dataKey="out" fill="rgb(244,63,94)" radius={[4, 4, 0, 0]} name="Out of Stock" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -592,7 +391,7 @@ export default function InventoryPage() {
                 <Search className="absolute left-3 top-2.5 size-4 text-[var(--text-muted)]" />
                 <input
                   type="text"
-                  placeholder="Search by SKU, product name, or category..."
+                  placeholder="Search by SKU, product name, or barcode..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
@@ -608,9 +407,9 @@ export default function InventoryPage() {
                     className="bg-transparent font-mono focus:outline-none text-[var(--text-primary)]"
                   >
                     <option value="ALL">All Categories</option>
-                    {categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {categories.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
                   </select>
@@ -624,7 +423,7 @@ export default function InventoryPage() {
                     className="bg-transparent font-mono focus:outline-none text-[var(--text-primary)]"
                   >
                     <option value="ALL">All Locations</option>
-                    {locations.map((l) => (
+                    {locations.map((l: any) => (
                       <option key={l.id} value={l.id}>
                         {l.code} ({l.name})
                       </option>
@@ -650,27 +449,54 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            {sortedItems.length === 0 ? (
+            {itemsError && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 flex items-center justify-between text-xs text-rose-400">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-4 shrink-0" />
+                  <span>Failed to load inventory items: {itemsError.message}</span>
+                </div>
+                <button
+                  onClick={() => mutateItems()}
+                  className="rounded-md bg-rose-500/20 px-3 py-1 font-semibold hover:bg-rose-500/30"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {items.length === 0 && !itemsLoading ? (
               <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-12 text-center space-y-3">
                 <Package className="size-10 text-[var(--text-muted)] mx-auto opacity-50" />
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">No inventory items found</h3>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    No items match your active search filter "{searchQuery}" or selected dropdown filters.
+                    {searchQuery || selectedCategory !== "ALL" || selectedStatus !== "ALL"
+                      ? "No items match your active search or filter criteria."
+                      : "No inventory items yet in this store. Add your first item to begin tracking stock."}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedCategory("ALL");
-                    setSelectedLocation("ALL");
-                    setSelectedStatus("ALL");
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--surface-elevated)] hover:bg-[var(--surface)] text-xs text-[var(--text-primary)] border border-[var(--border)] transition-colors"
-                >
-                  Clear All Filters
-                </button>
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedCategory("ALL");
+                      setSelectedLocation("ALL");
+                      setSelectedStatus("ALL");
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--surface-elevated)] hover:bg-[var(--surface)] text-xs text-[var(--text-primary)] border border-[var(--border)] transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddItemOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[var(--accent)] text-black text-xs font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="size-3.5" />
+                    <span>+ Add First Item</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-x-auto shadow-sm">
@@ -763,28 +589,33 @@ export default function InventoryPage() {
                         </div>
                       </th>
 
-                      <th className="px-3 py-3 text-center">Action</th>
+                      <th className="px-4 py-3 text-center">Quick Stock</th>
+                      <th className="px-3 py-3 text-center">Detail</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-[var(--border)]">
-                    {sortedItems.map((item) => {
-                      const onHand = getTotalOnHand(item.id, stockLevels);
-                      const status = getItemStatus(item, stockLevels);
-                      const statusCfg = INVENTORY_STATUS_CONFIG[status];
-                      const itemStock = stockLevels.filter((s) => s.itemId === item.id);
+                    {items.map((item) => {
+                      const status: InventoryStatus = item.status || "HEALTHY";
+                      const statusCfg = INVENTORY_STATUS_CONFIG[status] || INVENTORY_STATUS_CONFIG.HEALTHY;
+                      const itemStock = item.stockLevels ?? [];
 
                       return (
                         <tr
                           key={item.id}
-                          onClick={() => setSelectedItemId(item.id)}
-                          className="group cursor-pointer hover:bg-[var(--surface-elevated)]/60 transition-colors"
+                          className="group hover:bg-[var(--surface-elevated)]/60 transition-colors"
                         >
-                          <td className="px-4 py-3.5 font-mono font-semibold text-[var(--accent)] whitespace-nowrap">
+                          <td
+                            onClick={() => setSelectedItemId(item.id)}
+                            className="px-4 py-3.5 font-mono font-semibold text-[var(--accent)] whitespace-nowrap cursor-pointer"
+                          >
                             {item.sku}
                           </td>
 
-                          <td className="px-4 py-3.5">
+                          <td
+                            onClick={() => setSelectedItemId(item.id)}
+                            className="px-4 py-3.5 cursor-pointer"
+                          >
                             <p className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
                               {item.name}
                             </p>
@@ -803,8 +634,9 @@ export default function InventoryPage() {
 
                           <td className="px-4 py-3.5 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {locations.map((loc) => {
-                                const qty = itemStock.find((s) => s.locationId === loc.id)?.onHand ?? 0;
+                              {locations.map((loc: any) => {
+                                const sl = itemStock.find((s: any) => s.locationId === loc.id);
+                                const qty = sl?.onHand ?? 0;
                                 return (
                                   <span
                                     key={loc.id}
@@ -824,11 +656,11 @@ export default function InventoryPage() {
                           </td>
 
                           <td className="px-4 py-3.5 text-right font-mono font-bold text-[var(--text-primary)] whitespace-nowrap">
-                            {onHand} <span className="text-[10px] text-[var(--text-muted)] font-normal">{item.unit}</span>
+                            {item.onHand} <span className="text-[10px] text-[var(--text-muted)] font-normal">{item.unit}</span>
                           </td>
 
                           <td className="px-4 py-3.5 text-right font-mono text-[var(--text-primary)] whitespace-nowrap">
-                            ${item.unitPrice.toFixed(2)}
+                            ${Number(item.unitPrice).toFixed(2)}
                           </td>
 
                           <td className="px-4 py-3.5 whitespace-nowrap">
@@ -849,7 +681,26 @@ export default function InventoryPage() {
                             </span>
                           </td>
 
-                          <td className="px-3 py-3.5 text-center">
+                          {/* Quick Stock In / Out Button */}
+                          <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAdjustingItem(item);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[var(--surface-elevated)] hover:bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border-strong)] text-[11px] font-semibold transition-colors"
+                            >
+                              <span className="text-emerald-400">+</span>
+                              <span className="text-rose-400">−</span>
+                              <span>Adjust</span>
+                            </button>
+                          </td>
+
+                          <td
+                            onClick={() => setSelectedItemId(item.id)}
+                            className="px-3 py-3.5 text-center cursor-pointer"
+                          >
                             <ChevronRight className="size-4 text-[var(--text-muted)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition-all" />
                           </td>
                         </tr>
@@ -871,22 +722,99 @@ export default function InventoryPage() {
             purchaseOrders={purchaseOrders}
             items={items}
             locations={locations}
-            onSendPO={handleSendPO}
-            onCreatePO={handleCreatePO}
-            onReceivePO={handleReceivePO}
+            onSendPO={async (poId) => {
+              await fetch(`/api/inventory/purchase-orders/${poId}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "SENT" }),
+              });
+              void mutatePOs();
+            }}
+            onCreatePO={async (newPOData) => {
+              await fetch(`/api/inventory/purchase-orders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newPOData),
+              });
+              void mutatePOs();
+            }}
+            onReceivePO={async (poId, locationId) => {
+              await fetch(`/api/inventory/purchase-orders/${poId}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "RECEIVED", targetLocationId: locationId }),
+              });
+              void mutatePOs();
+              void mutateStats();
+              void mutateItems();
+            }}
           />
         </div>
       )}
 
-      {/* ── Slide-Over Detail Component ── */}
+      {/* ── Slide-Over Detail Component (Connected to DB API) ── */}
       <ItemDetailSlideover
-        item={selectedItem}
+        itemId={selectedItemId}
         locations={locations}
-        stockLevels={stockLevels}
-        movements={movements}
         onClose={() => setSelectedItemId(null)}
-        onUpdateReorderSettings={handleUpdateReorderSettings}
-        onRecordMovement={handleRecordMovement}
+        onItemUpdated={(updated) => {
+          void mutateStats();
+          void mutateItems((curr: any) => {
+            if (!curr) return curr;
+            return {
+              ...curr,
+              items: curr.items.map((i: any) => (i.id === updated.id ? { ...i, ...updated } : i)),
+            };
+          }, true);
+        }}
+        onOpenStockAdjust={(itm) => {
+          setAdjustingItem(itm);
+        }}
+      />
+
+      {/* ── Add Item Slideover ── */}
+      <AddItemSlideover
+        isOpen={isAddItemOpen}
+        categories={categories}
+        locations={locations}
+        onClose={() => setIsAddItemOpen(false)}
+        onItemCreated={(newItem) => {
+          void mutateStats();
+          void mutateItems((curr: any) => {
+            if (!curr) return curr;
+            return {
+              ...curr,
+              items: [newItem, ...curr.items],
+            };
+          }, true);
+        }}
+        onOpenAddCategory={() => setIsCategoryModalOpen(true)}
+      />
+
+      {/* ── Manage Categories Modal ── */}
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        categories={categories}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoryCreated={(newCat) => {
+          void mutateCategories((curr: any) => {
+            if (!curr) return { categories: [newCat] };
+            return {
+              categories: [...curr.categories, newCat].sort((a: any, b: any) =>
+                a.name.localeCompare(b.name)
+              ),
+            };
+          }, true);
+        }}
+      />
+
+      {/* ── Quick Stock In/Out Modal ── */}
+      <StockAdjustModal
+        isOpen={Boolean(adjustingItem)}
+        item={adjustingItem}
+        locations={locations}
+        onClose={() => setAdjustingItem(null)}
+        onSuccess={handleStockAdjustSuccess}
       />
     </div>
   );

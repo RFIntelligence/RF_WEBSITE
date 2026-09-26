@@ -90,6 +90,15 @@ export type {
   AskRfQuery,
   AuditLog,
   Invitation,
+  InventoryCategory,
+  InventoryLocation,
+  InventoryItem,
+  InventoryBatch,
+  InventoryStockLevel,
+  InventoryMovement,
+  Supplier,
+  PurchaseOrder,
+  PurchaseOrderItem,
   PrismaPromise,
 } from "@prisma/client";
 export {
@@ -102,4 +111,7 @@ export {
   DocumentProcessingStatus,
   ReportStatus,
   InvitationStatus,
+  InventoryUnit,
+  InventoryMovementType,
+  PurchaseOrderStatus,
 } from "@prisma/client";

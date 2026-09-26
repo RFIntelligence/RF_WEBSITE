@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Package,
@@ -88,86 +88,148 @@ export const INVENTORY_STATUS_CONFIG: Record<
 };
 
 interface ItemDetailSlideoverProps {
-  item: InventoryItem | null;
-  locations: InventoryLocation[];
-  stockLevels: StockLevel[];
-  movements: InventoryMovement[];
+  itemId: string | null;
+  locations: Array<{ id: string; name: string; code: string; isPrimary?: boolean }>;
   onClose: () => void;
-  onUpdateReorderSettings: (itemId: string, newReorderPoint: number, newTargetStock: number) => void;
-  onRecordMovement: (
-    itemId: string,
-    locationId: string,
-    type: MovementType,
-    quantity: number,
-    reference: string,
-    performedBy: string,
-    notes?: string
-  ) => void;
+  onItemUpdated: (updatedItem: any) => void;
+  onOpenStockAdjust: (item: any) => void;
 }
 
 export function ItemDetailSlideover({
-  item,
+  itemId,
   locations,
-  stockLevels,
-  movements,
   onClose,
-  onUpdateReorderSettings,
-  onRecordMovement,
+  onItemUpdated,
+  onOpenStockAdjust,
 }: ItemDetailSlideoverProps) {
-  if (!item) return null;
-
-  const itemStockLevels = stockLevels.filter((sl) => sl.itemId === item.id);
-  const itemMovements = movements.filter((m) => m.itemId === item.id);
-  const totalOnHand = getTotalOnHand(item.id, stockLevels);
-  const status = getItemStatus(item, stockLevels);
-  const statusCfg = INVENTORY_STATUS_CONFIG[status];
-  const totalValue = totalOnHand * item.unitPrice;
-
-  // Form states
-  const [reorderPointInput, setReorderPointInput] = useState<number>(item.reorderPoint);
-  const [targetStockInput, setTargetStockInput] = useState<number>(item.targetStock);
+  const [detailItem, setDetailItem] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reorderPointInput, setReorderPointInput] = useState<number>(0);
+  const [targetStockInput, setTargetStockInput] = useState<number>(0);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Movement Form states
-  const [movType, setMovType] = useState<MovementType>("RECEIPT");
-  const [movLocationId, setMovLocationId] = useState<string>(locations[0]?.id ?? "");
-  const [movQty, setMovQty] = useState<number>(10);
-  const [movRef, setMovRef] = useState<string>(`PO-2026-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [movUser, setMovUser] = useState<string>("Alex Rivera");
-  const [movNotes, setMovNotes] = useState<string>("");
-  const [movementToast, setMovementToast] = useState<string | null>(null);
+  // Fetch real details from /api/inventory/items/[id]
+  useEffect(() => {
+    if (!itemId) {
+      setDetailItem(null);
+      return;
+    }
 
-  // 90-day Sparkline
-  const sparklineData = get90DaySparklineData(item, totalOnHand);
+    let isMounted = true;
+    setLoading(true);
+    setError(null);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateReorderSettings(item.id, Number(reorderPointInput), Number(targetStockInput));
-    setSettingsSavedToast(true);
-    setTimeout(() => setSettingsSavedToast(false), 3000);
-  };
+    fetch(`/api/inventory/items/${itemId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load item details");
+        return res.json();
+      })
+      .then((data) => {
+        if (isMounted) {
+          setDetailItem(data.item);
+          setReorderPointInput(data.item.reorderPoint);
+          setTargetStockInput(data.item.targetStock);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message);
+          setLoading(false);
+        }
+      });
 
-  const handleRecordMovementSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!movLocationId || movQty <= 0) return;
+    return () => {
+      isMounted = false;
+    };
+  }, [itemId]);
 
-    onRecordMovement(
-      item.id,
-      movLocationId,
-      movType,
-      Number(movQty),
-      movRef.trim() || "REF-LOG",
-      movUser.trim() || "Inventory Operator",
-      movNotes.trim()
+  if (!itemId) return null;
+
+  if (loading || !detailItem) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="item-slideover-title"
+        className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+        onClick={onClose}
+      >
+        <div
+          className="relative w-full max-w-2xl h-full flex flex-col bg-[var(--surface)] border-l border-[var(--border-strong)] shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-[var(--border)] p-6 pb-5 bg-[var(--surface-elevated)]/40">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-elevated)] animate-pulse" />
+              <div className="space-y-2">
+                <div className="h-4 w-32 bg-[var(--surface-elevated)] rounded animate-pulse" />
+                <div className="h-3 w-48 bg-[var(--surface-elevated)] rounded animate-pulse" />
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close slideover"
+              className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-6 text-[var(--text-muted)]">
+            {error ? (
+              <div className="flex flex-col items-center gap-2 text-rose-400">
+                <AlertCircle className="size-6" />
+                <p className="text-sm">{error}</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="h-2 w-2 rounded-full bg-[var(--accent)] animate-ping" />
+                <span>Loading product specifications...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     );
+  }
 
-    const locName = locations.find((l) => l.id === movLocationId)?.code ?? "Warehouse";
-    setMovementToast(`Recorded ${movType} of ${movQty} ${item.unit} at ${locName}`);
-    setTimeout(() => setMovementToast(null), 4000);
+  const item = detailItem;
+  const status: InventoryStatus = item ? item.status : "HEALTHY";
+  const statusCfg = INVENTORY_STATUS_CONFIG[status] || INVENTORY_STATUS_CONFIG.HEALTHY;
+  const totalOnHand = item?.onHand ?? 0;
+  const totalValue = totalOnHand * (item?.unitPrice ?? 0);
+  const itemStockLevels: any[] = item?.stockLevels ?? [];
+  const itemMovements: any[] = item?.movements ?? [];
+  const sparklineData = item ? get90DaySparklineData(item, totalOnHand) : [];
 
-    // Reset reference for next entry
-    setMovRef(`REF-2026-${Math.floor(1000 + Math.random() * 9000)}`);
-    setMovNotes("");
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!item) return;
+
+    try {
+      const res = await fetch(`/api/inventory/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reorderPoint: Number(reorderPointInput),
+          targetStock: Number(targetStockInput),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update settings");
+
+      setDetailItem((prev: any) => ({
+        ...prev,
+        ...data.item,
+      }));
+      onItemUpdated(data.item);
+      setSettingsSavedToast(true);
+      setTimeout(() => setSettingsSavedToast(false), 3000);
+    } catch (err: any) {
+      setError(err?.message || "Failed to save settings");
+    }
   };
 
   return (
@@ -566,123 +628,25 @@ export function ItemDetailSlideover({
             </form>
           </div>
 
-          {/* 5. "Record Movement" Form */}
-          <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--surface-elevated)]/40 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+          {/* 5. Quick Stock Adjustment Trigger */}
+          <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--surface-elevated)]/40 p-4 flex items-center justify-between">
+            <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
                 <PlusCircle className="size-4 text-[var(--accent)]" />
-                Record Stock Movement
+                Manage Stock (In / Out / Transfer)
               </h3>
-              {movementToast && (
-                <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 animate-in fade-in">
-                  <CheckCircle2 className="size-3" /> {movementToast}
-                </span>
-              )}
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                Record receipts, dispatch customer orders, perform shelf audits, or transfer stock.
+              </p>
             </div>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Appends a new receipt, shipment, or adjustment event to update stock levels live.
-            </p>
-
-            <form onSubmit={handleRecordMovementSubmit} className="space-y-3 pt-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Movement Type
-                  </label>
-                  <select
-                    value={movType}
-                    onChange={(e) => setMovType(e.target.value as MovementType)}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="RECEIPT">RECEIPT (Stock +)</option>
-                    <option value="SHIPMENT">SHIPMENT (Stock -)</option>
-                    <option value="TRANSFER">TRANSFER (Inter-location)</option>
-                    <option value="ADJUSTMENT">ADJUSTMENT (Audit)</option>
-                    <option value="RETURN">RETURN (RMA +)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Target Location
-                  </label>
-                  <select
-                    value={movLocationId}
-                    onChange={(e) => setMovLocationId(e.target.value)}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  >
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name} ({loc.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Quantity ({item.unit})
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={movQty}
-                    onChange={(e) => setMovQty(Math.max(1, Number(e.target.value)))}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Reference # (PO/SO)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={movRef}
-                    onChange={(e) => setMovRef(e.target.value)}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Performed By
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={movUser}
-                    onChange={(e) => setMovUser(e.target.value)}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono text-[var(--text-muted)] uppercase mb-1">
-                    Notes / Reason
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Received batch PO shipment"
-                    value={movNotes}
-                    onChange={(e) => setMovNotes(e.target.value)}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  className="rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
-                >
-                  <PlusCircle className="size-4" />
-                  Append Movement &amp; Update Stock
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => onOpenStockAdjust(item)}
+              className="rounded-lg bg-[var(--accent)] text-black px-4 py-2 text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            >
+              <PlusCircle className="size-3.5" />
+              Adjust Stock
+            </button>
           </div>
         </div>
 
