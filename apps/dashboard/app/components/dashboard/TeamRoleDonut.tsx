@@ -47,6 +47,7 @@ export function TeamRoleDonut({
   return (
     <StatCard
       title="Team Members"
+      titleHref="/team"
       value={roles.total}
       delta={delta}
       deltaValue={deltaValue}

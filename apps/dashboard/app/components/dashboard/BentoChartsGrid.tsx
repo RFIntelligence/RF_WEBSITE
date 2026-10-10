@@ -165,6 +165,7 @@ export function BentoChartsGrid({ data, onRetry }: BentoChartsGridProps) {
               delta={projectCard.delta}
               deltaValue={projectCard.deltaValue}
               period={projectCard.period}
+              projects={data.projects}
             />
           )}
         </div>

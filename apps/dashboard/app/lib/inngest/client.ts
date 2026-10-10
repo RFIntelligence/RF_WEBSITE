@@ -1,7 +1,7 @@
 import { Inngest } from "inngest";
 
 const isDev =
-  process.env.NODE_ENV === "development" || process.env.INNGEST_DEV === "1";
+  process.env.NODE_ENV !== "production" || process.env.INNGEST_DEV === "1";
 
 const inngestBaseUrl =
   process.env.INNGEST_BASE_URL ||

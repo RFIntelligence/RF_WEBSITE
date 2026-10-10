@@ -138,6 +138,7 @@ interface ActiveProjectsListProps {
   onEditProject?: (project: Project) => void;
   /** Callback when a project is updated locally/via API */
   onProjectUpdated?: (updatedProject: Project) => void;
+  initialExpandedId?: string | null;
 }
 
 export function ActiveProjectsList({
@@ -146,8 +147,15 @@ export function ActiveProjectsList({
   standalone = false,
   onEditProject,
   onProjectUpdated,
+  initialExpandedId = null,
 }: ActiveProjectsListProps) {
-  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(initialExpandedId);
+
+  React.useEffect(() => {
+    if (initialExpandedId) {
+      setExpandedProjectId(initialExpandedId);
+    }
+  }, [initialExpandedId]);
 
   // New subtask state per project
   const [newTaskTitle, setNewTaskTitle]         = useState<Record<string, string>>({});
@@ -335,6 +343,7 @@ export function ActiveProjectsList({
             return (
               <div
                 key={project.id}
+                id={`project-${project.id}`}
                 className={cn(
                   "group rounded-lg border transition-all duration-200 overflow-hidden",
                   isExpanded

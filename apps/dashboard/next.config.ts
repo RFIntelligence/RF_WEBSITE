@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
     "bcryptjs",
     "inngest",
   ],
+  async redirects() {
+    return [
+      {
+        source: "/documents",
+        destination: "/reports?tab=documents",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -29,6 +29,7 @@ export function ConversationsMini({
   return (
     <StatCard
       title="Open Conversations"
+      titleHref="/conversations"
       value={total}
       delta={delta}
       deltaValue={deltaValue}

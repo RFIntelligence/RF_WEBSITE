@@ -347,18 +347,29 @@ async function fetchAggregatedCounts(orgId: string, now: Date): Promise<{
 function formatAlerts(
   atRiskProjects: Array<{ id: string; name: string; status: string; accountName: string; dueDate: Date }>,
   criticalInsights: Array<{ id: string; title: string; body: string; accountName: string | null }>,
-  failedDocuments: Array<{ id: string; fileName: string; failureReason: string | null }> = [],
+  failedDocuments: Array<{ id: string; fileName: string; failureReason: string | null; projectId?: string | null }> = [],
 ): DashboardAlert[] {
   const alerts: DashboardAlert[] = [];
 
   for (const doc of failedDocuments) {
+    const destination = doc.projectId
+      ? `/projects?id=${doc.projectId}`
+      : doc.id
+      ? `/reports?tab=documents&docId=${doc.id}`
+      : "";
+    const label = doc.projectId
+      ? "View in project"
+      : doc.id
+      ? "View document"
+      : "";
+
     alerts.push({
       id:          `alert_doc_${doc.id}`,
       severity:    "critical",
       title:       `Processing failed: ${doc.fileName}`,
       body:        doc.failureReason ? `AI extraction failed: ${doc.failureReason}` : "AI document processing encountered an error.",
-      ctaLabel:    "View documents",
-      ctaHref:     "/documents",
+      ctaLabel:    label,
+      ctaHref:     destination,
       dismissible: true,
     });
   }
@@ -375,8 +386,8 @@ function formatAlerts(
       severity:    p.status === "BLOCKED" ? "critical" : "warning",
       title:       `${p.name} is ${p.status === "BLOCKED" ? "blocked" : "at risk"}`,
       body:        `${p.accountName} — ${duePart}.`,
-      ctaLabel:    "Go to project",
-      ctaHref:     "/projects",
+      ctaLabel:    p.id ? "Go to project" : "",
+      ctaHref:     p.id ? `/projects?id=${p.id}` : "",
       dismissible: true,
     });
   }
@@ -387,8 +398,8 @@ function formatAlerts(
       severity:    "critical",
       title:       ins.title,
       body:        ins.accountName ? `${ins.accountName} — ${ins.body}` : ins.body,
-      ctaLabel:    "View insight",
-      ctaHref:     "/ai-insights",
+      ctaLabel:    ins.id ? "View insight" : "",
+      ctaHref:     ins.id ? `/ai-insights?id=${ins.id}` : "",
       dismissible: true,
     });
   }
@@ -400,6 +411,7 @@ function formatAlerts(
 
 type RawActivityRow = {
   id: string;
+  projectId?: string | null;
   action: string;
   details?: string | null;
   type?: string;
@@ -422,17 +434,22 @@ function formatCombinedActivities(
   projectActivities: RawActivityRow[],
   auditLogs: RawAuditLogRow[] = []
 ): DashboardActivity[] {
-  const formattedProj: DashboardActivity[] = projectActivities.map((r) => ({
-    id:             r.id,
-    authorName:     r.author?.name || "System User",
-    authorInitials: r.author?.avatarInitials || "RF",
-    projectName:    r.project?.name || "Project",
-    action:         r.action,
-    details:        r.details,
-    type:           (r.type as DashboardActivity["type"]) || "status",
-    relativeTime:   relativeTime(r.createdAt),
-    createdAt:      r.createdAt.toISOString(),
-  }));
+  const formattedProj: DashboardActivity[] = projectActivities.map((r) => {
+    const projId = r.projectId || undefined;
+    return {
+      id:             r.id,
+      authorName:     r.author?.name || "System User",
+      authorInitials: r.author?.avatarInitials || "RF",
+      projectName:    r.project?.name || "Project",
+      action:         r.action,
+      details:        r.details,
+      type:           (r.type as DashboardActivity["type"]) || "status",
+      relativeTime:   relativeTime(r.createdAt),
+      createdAt:      r.createdAt.toISOString(),
+      projectId:      projId,
+      targetHref:     projId ? `/projects?id=${projId}` : undefined,
+    };
+  });
 
   const formattedAudit: DashboardActivity[] = auditLogs.map((log) => {
     let actionLabel = log.action.replace(/[._]/g, " ");
@@ -440,27 +457,40 @@ function formatCombinedActivities(
     let type: DashboardActivity["type"] = "milestone";
     let authorName = log.user?.name || "AI Engine";
     let authorInitials = log.user?.avatarInitials || (log.user ? "RF" : "AI");
+    let targetHref: string | undefined = undefined;
 
-    if (log.action.includes("ai_replied")) {
+    if (log.action.includes("ai_replied") || log.entityType === "conversation") {
       actionLabel = "AI drafted customer response";
       projectName = "Customer Support";
       type = "comment";
       authorName = "AI Responder";
       authorInitials = "AI";
+      targetHref = log.entityId ? `/conversations?id=${log.entityId}` : undefined;
     } else if (log.action.includes("escalated")) {
       actionLabel = "Customer conversation escalated to agent";
       projectName = "Customer Support";
       type = "status";
       authorName = "AI Monitor";
       authorInitials = "AI";
+      targetHref = log.entityId ? `/conversations?id=${log.entityId}` : undefined;
     } else if (log.action.includes("invited")) {
       actionLabel = "Invited new team member";
       projectName = "Access";
       type = "milestone";
-    } else if (log.action.includes("document")) {
+      targetHref = "/team";
+    } else if (log.action.includes("document") || log.entityType === "document") {
       actionLabel = "Document uploaded";
       projectName = "Knowledge Base";
       type = "milestone";
+      targetHref = log.entityId ? `/reports?tab=documents&docId=${log.entityId}` : undefined;
+    } else if (log.entityType === "project") {
+      targetHref = log.entityId ? `/projects?id=${log.entityId}` : undefined;
+    } else if (log.entityType === "task") {
+      targetHref = log.entityId ? `/tasks?id=${log.entityId}` : undefined;
+    } else if (log.entityType === "insight") {
+      targetHref = log.entityId ? `/ai-insights?id=${log.entityId}` : undefined;
+    } else if (log.entityType === "report") {
+      targetHref = log.entityId ? `/reports?id=${log.entityId}` : undefined;
     }
 
     return {
@@ -473,6 +503,7 @@ function formatCombinedActivities(
       type,
       relativeTime:   relativeTime(log.createdAt),
       createdAt:      log.createdAt.toISOString(),
+      targetHref,
     };
   });
 
@@ -718,6 +749,7 @@ export async function GET(): Promise<Response> {
         take:    5,
         select: {
           id:        true,
+          projectId: true,
           action:    true,
           details:   true,
           type:      true,
@@ -754,7 +786,7 @@ export async function GET(): Promise<Response> {
       prisma.document.findMany({
         where:   { organizationId: orgId, processingStatus: "FAILED" },
         take:    3,
-        select:  { id: true, fileName: true, failureReason: true },
+        select:  { id: true, fileName: true, failureReason: true, projectId: true },
       }),
     ]);
 
@@ -789,6 +821,22 @@ export async function GET(): Promise<Response> {
     );
 
     const countsFailed = aggregatedCountsRes.status === "rejected";
+    if (projectsRes.status === "rejected") {
+      console.error("[Dashboard API] projects query rejected:", projectsRes.reason);
+    }
+    if (insightsRes.status === "rejected") {
+      console.error("[Dashboard API] insights query rejected:", insightsRes.reason);
+    }
+    if (aggregatedCountsRes.status === "rejected") {
+      console.error("[Dashboard API] counts query rejected:", aggregatedCountsRes.reason);
+    }
+    if (conversationsRes.status === "rejected") {
+      console.error("[Dashboard API] conversations query rejected:", conversationsRes.reason);
+    }
+    if (activitiesRes.status === "rejected") {
+      console.error("[Dashboard API] activities query rejected:", activitiesRes.reason);
+    }
+
     const errors: Record<string, any> = {
       projects: projectsRes.status === "rejected",
       insights: insightsRes.status === "rejected",
@@ -825,11 +873,21 @@ export async function GET(): Promise<Response> {
       errors,
     };
 
-    // Cache successful parts
-    dashboardCache.set(orgId, {
-      data: payload,
-      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-    });
+    // Cache strictly successful responses only (never cache degraded or failed states)
+    const hasDegradedOrFailedQueries =
+      errors.projects ||
+      errors.insights ||
+      errors.metrics ||
+      errors.alerts ||
+      errors.conversations ||
+      errors.activities;
+
+    if (!hasDegradedOrFailedQueries) {
+      dashboardCache.set(orgId, {
+        data: payload,
+        expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      });
+    }
 
     return Response.json(payload);
   });

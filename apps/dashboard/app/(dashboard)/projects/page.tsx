@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   FolderKanban,
@@ -99,14 +100,25 @@ function ToastBanner({ toast, onDismiss }: { toast: Toast; onDismiss: (id: numbe
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page Content ─────────────────────────────────────────────────────────────
 
-export default function ProjectsPage() {
+function ProjectsContent() {
+  const searchParams = useSearchParams();
+  const requestedId = searchParams.get("id");
+  const requestedStatus = searchParams.get("status");
+
   const [projects, setProjects]         = useState<Project[]>([]);
   const [members, setMembers]           = useState<OrgMember[]>([]);
   const [loading, setLoading]           = useState(true);
   const [searchQuery, setSearchQuery]   = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    if (requestedStatus && ["ON_TRACK", "AT_RISK", "BLOCKED", "COMPLETED"].includes(requestedStatus)) {
+      return requestedStatus;
+    }
+    return "all";
+  });
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(requestedId);
+  const hasHandledInitialId = useRef(false);
 
   // Modal State
   const [dialogOpen, setDialogOpen]             = useState(false);
@@ -126,15 +138,33 @@ export default function ProjectsPage() {
       const res = await fetch("/api/projects");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { projects: Project[] };
-      setProjects(
-        data.projects.map((p) => ({ ...p, ownerInitials: getInitials(p.ownerName) }))
-      );
+      const mapped = data.projects.map((p) => ({ ...p, ownerInitials: getInitials(p.ownerName) }));
+      setProjects(mapped);
+
+      if (requestedId && !hasHandledInitialId.current) {
+        hasHandledInitialId.current = true;
+        const target = mapped.find((p) => p.id === requestedId);
+        if (target) {
+          setSelectedProjectId(requestedId);
+          if (requestedStatus && target.status !== requestedStatus) {
+            setStatusFilter("all");
+          }
+          setTimeout(() => {
+            const el = document.getElementById(`project-${requestedId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 150);
+        } else {
+          pushToast("error", "Project not found or you don't have access in this workspace.");
+        }
+      }
     } catch {
       pushToast("error", "Failed to load projects. Please refresh.");
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [requestedId, requestedStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMembers = useCallback(async () => {
     try {
@@ -646,6 +676,7 @@ export default function ProjectsPage() {
             standalone
             onEditProject={handleOpenEditModal}
             onProjectUpdated={handleProjectUpdated}
+            initialExpandedId={selectedProjectId}
           />
         )}
       </div>
@@ -662,6 +693,21 @@ export default function ProjectsPage() {
         ))}
       </div>
     </>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-16 text-xs text-[var(--text-muted)] gap-2">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          Loading projects…
+        </div>
+      }
+    >
+      <ProjectsContent />
+    </Suspense>
   );
 }
 

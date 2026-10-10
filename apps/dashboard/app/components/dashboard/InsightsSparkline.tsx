@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatCard } from "./StatCard";
 import type { InsightHistoryPoint } from "@/app/lib/dashboard-mock";
@@ -46,6 +47,7 @@ export function InsightsSparkline({
   return (
     <StatCard
       title={title}
+      titleHref="/ai-insights"
       value={total}
       delta={delta}
       deltaValue={deltaValue}
@@ -134,13 +136,16 @@ export function InsightsSparkline({
         </div>
 
         {/* X-axis labels */}
-        <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] px-1 pt-1 border-t border-white/5">
+        <Link
+          href="/ai-insights"
+          className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] px-1 pt-1 border-t border-white/5 transition-colors group/curve"
+        >
           <span>{history[0]?.date ?? "30d ago"}</span>
-          <span className="uppercase tracking-widest text-[9px] font-bold text-[var(--text-secondary)]">
-            30-Day Activity Curve
+          <span className="uppercase tracking-widest text-[9px] font-bold text-[var(--text-secondary)] group-hover/curve:text-[var(--accent)] transition-colors">
+            30-Day Activity Curve →
           </span>
           <span>{history[history.length - 1]?.date ?? "Today"}</span>
-        </div>
+        </Link>
       </div>
     </StatCard>
   );

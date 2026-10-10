@@ -103,6 +103,8 @@ export interface DashboardActivity {
   type: "status" | "comment" | "task" | "milestone";
   relativeTime: string;
   createdAt: string;
+  targetHref?: string;
+  projectId?: string;
 }
 
 export interface InsightHistoryPoint {

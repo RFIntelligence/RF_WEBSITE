@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { StatCard } from "./StatCard";
 import type { PendingActionStats } from "@/app/types/dashboard";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ArrowUpRight } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 
 interface PendingActionsCardProps {
@@ -24,11 +25,13 @@ export function PendingActionsCard({
       label: "Open Tasks",
       count: stats.openTasks,
       color: "bg-amber-400",
+      href: "/tasks?status=open",
     },
     {
       label: "Escalations",
       count: stats.escalations,
       color: "bg-violet-400",
+      href: "/conversations?status=human_escalation",
     },
   ];
 
@@ -37,17 +40,20 @@ export function PendingActionsCard({
       label: "Unread Insights",
       count: stats.unreadInsights,
       color: "bg-red-400",
+      href: "/ai-insights",
     },
     {
       label: "At-Risk Projects",
       count: stats.atRiskProjects,
       color: "bg-yellow-400",
+      href: "/projects?status=AT_RISK",
     },
   ];
 
   return (
     <StatCard
       title="Pending Actions"
+      titleHref="/tasks?status=open"
       value={stats.total}
       delta={delta}
       deltaValue={deltaValue}
@@ -73,18 +79,24 @@ export function PendingActionsCard({
               </div>
               <div className="space-y-1">
                 {actionItems.map((item) => (
-                  <div
+                  <Link
                     key={item.label}
-                    className="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] border border-white/5 hover:border-white/15 transition-colors"
+                    href={item.href}
+                    className="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.05] transition-all group/action focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
                   >
                     <div className="flex items-center gap-2">
                       <span className={cn("size-1.5 rounded-full", item.color)} />
-                      <span className="text-[11px] font-mono text-[var(--text-secondary)]">{item.label}</span>
+                      <span className="text-[11px] font-mono text-[var(--text-secondary)] group-hover/action:text-[var(--text-primary)] transition-colors">
+                        {item.label}
+                      </span>
                     </div>
-                    <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
-                      {item.count}
-                    </span>
-                  </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
+                        {item.count}
+                      </span>
+                      <ArrowUpRight className="size-2.5 opacity-0 group-hover/action:opacity-60 transition-opacity" />
+                    </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -96,18 +108,24 @@ export function PendingActionsCard({
               </div>
               <div className="space-y-1">
                 {signalItems.map((item) => (
-                  <div
+                  <Link
                     key={item.label}
-                    className="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] border border-white/5 hover:border-white/15 transition-colors"
+                    href={item.href}
+                    className="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.05] transition-all group/signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
                   >
                     <div className="flex items-center gap-2">
                       <span className={cn("size-1.5 rounded-full", item.color)} />
-                      <span className="text-[11px] font-mono text-[var(--text-secondary)]">{item.label}</span>
+                      <span className="text-[11px] font-mono text-[var(--text-secondary)] group-hover/signal:text-[var(--text-primary)] transition-colors">
+                        {item.label}
+                      </span>
                     </div>
-                    <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
-                      {item.count}
-                    </span>
-                  </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
+                        {item.count}
+                      </span>
+                      <ArrowUpRight className="size-2.5 opacity-0 group-hover/signal:opacity-60 transition-opacity" />
+                    </div>
+                  </Link>
                 ))}
               </div>
             </div>

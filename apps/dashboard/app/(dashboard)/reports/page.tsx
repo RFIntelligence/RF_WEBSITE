@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   FileText,
   Upload,
@@ -64,15 +64,23 @@ function formatDate(iso: string): string {
   });
 }
 
-export default function ReportsPage() {
+function ReportsContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"reports" | "documents">("reports");
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const requestedDocId = searchParams.get("docId");
+  const requestedReportId = searchParams.get("id");
+
+  const [activeTab, setActiveTab] = useState<"reports" | "documents">(() =>
+    requestedTab === "documents" || requestedDocId ? "documents" : "reports"
+  );
   const [reports, setReports] = useState<ApiReport[]>([]);
   const [documents, setDocuments] = useState<ApiDocument[]>([]);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const hasHandledScroll = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +88,29 @@ export default function ReportsPage() {
   const handleUnauthorized = useCallback(() => {
     router.replace("/login");
   }, [router]);
+
+  const handleTabChange = useCallback(
+    (newTab: "reports" | "documents") => {
+      setActiveTab(newTab);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", newTab);
+      if (newTab === "reports") {
+        params.delete("docId");
+      } else {
+        params.delete("id");
+      }
+      router.replace(`/reports?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
+
+  useEffect(() => {
+    if (requestedTab === "documents" || requestedDocId) {
+      setActiveTab("documents");
+    } else if (requestedTab === "reports" || requestedReportId) {
+      setActiveTab("reports");
+    }
+  }, [requestedTab, requestedDocId, requestedReportId]);
 
   const loadDocuments = useCallback(async () => {
     const res = await fetch("/api/documents");
@@ -130,6 +161,27 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (isLoading || hasHandledScroll.current) return;
+    const targetId = requestedDocId
+      ? `doc-${requestedDocId}`
+      : requestedReportId
+      ? `report-${requestedReportId}`
+      : null;
+
+    if (targetId) {
+      const el = document.getElementById(targetId);
+      if (el) {
+        hasHandledScroll.current = true;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-[var(--accent)]");
+        setTimeout(() => {
+          el.classList.remove("ring-2", "ring-[var(--accent)]");
+        }, 3000);
+      }
+    }
+  }, [isLoading, requestedDocId, requestedReportId]);
 
   // Poll while any document is still being processed by the background job.
   const hasPending = documents.some((doc) => doc.processingStatus === "PENDING");
@@ -251,7 +303,7 @@ export default function ReportsPage() {
       {/* Tabs */}
       <div className="flex items-center border-b border-[var(--border)]">
         <button
-          onClick={() => setActiveTab("reports")}
+          onClick={() => handleTabChange("reports")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
             activeTab === "reports"
               ? "border-[var(--accent)] text-[var(--accent)] font-semibold"
@@ -262,7 +314,7 @@ export default function ReportsPage() {
           Generated Reports ({reports.length})
         </button>
         <button
-          onClick={() => setActiveTab("documents")}
+          onClick={() => handleTabChange("documents")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
             activeTab === "documents"
               ? "border-[var(--accent)] text-[var(--accent)] font-semibold"
@@ -293,6 +345,7 @@ export default function ReportsPage() {
               {reports.map((rep) => (
                 <div
                   key={rep.id}
+                  id={`report-${rep.id}`}
                   className="group rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col justify-between space-y-4 hover:border-[var(--border-strong)] hover:bg-[var(--surface-elevated)] transition-all"
                 >
                   <div className="space-y-2">
@@ -440,6 +493,7 @@ export default function ReportsPage() {
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
+                    id={`doc-${doc.id}`}
                     className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--surface-elevated)]/50 transition-colors"
                   >
                     <div className="flex items-start gap-3">
@@ -518,5 +572,19 @@ function EmptyState({ label }: { label: string }) {
     <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface)] p-10 text-center text-xs text-[var(--text-muted)]">
       {label}
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-[var(--accent)]" />
+        </div>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
   );
 }

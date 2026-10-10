@@ -62,6 +62,7 @@ export async function POST(
     select: {
       id: true,
       organizationId: true,
+      projectId: true,
       type: true,
       severity: true,
       title: true,
@@ -103,8 +104,8 @@ export async function POST(
       select: { actionStatus: true },
     });
 
-    // 3. If "Create Task" — materialise a Task row linked to no specific
-    //    project (can be assigned later). Title comes from the insight.
+    // 3. If "Create Task" — materialise a Task row linked to insight's
+    //    project (if any) or project-independent. Title comes from the insight.
     //    Prevent duplicate task creation on repeated requests.
     if (typedAction === "TASK_CREATED") {
       const existingTask = await tx.task.findFirst({
@@ -126,8 +127,25 @@ export async function POST(
             description: `[insightId:${insight.id}][priority:${priorityTag}] ${insight.recommendedAction}`,
             status:      "TODO",
             assigneeId:  session.userId,
+            projectId:   insight.projectId ?? null,
           },
         });
+
+        if (insight.projectId) {
+          const allTasks = await tx.task.findMany({
+            where: { projectId: insight.projectId },
+            select: { status: true },
+          });
+          const totalCount = allTasks.length;
+          const doneCount = allTasks.filter((t) => t.status === "DONE").length;
+          await tx.project.update({
+            where: { id: insight.projectId },
+            data: {
+              openTasksCount: totalCount - doneCount,
+              progress: totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0,
+            },
+          });
+        }
       }
     }
 

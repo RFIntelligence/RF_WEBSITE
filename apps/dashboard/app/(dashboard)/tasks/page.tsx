@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   CheckSquare,
   Square,
@@ -26,16 +27,33 @@ interface ProjectOption {
   name: string;
 }
 
-export default function TasksPage() {
+function TasksContent() {
+  const searchParams = useSearchParams();
+  const requestedStatus = searchParams.get("status");
+  const requestedSource = searchParams.get("source");
+  const requestedId = searchParams.get("id");
+
   const [tasks, setTasks] = React.useState<TaskDto[]>([]);
   const [projects, setProjects] = React.useState<ProjectOption[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   // Filters
-  const [statusFilter, setStatusFilter] = React.useState<"all" | "open" | "done">("open");
-  const [sourceFilter, setSourceFilter] = React.useState<"all" | "insight" | "independent" | "project">("all");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "open" | "done">(() => {
+    if (requestedStatus === "open" || requestedStatus === "done" || requestedStatus === "all") {
+      return requestedStatus;
+    }
+    return "open";
+  });
+  const [sourceFilter, setSourceFilter] = React.useState<"all" | "insight" | "independent" | "project">(() => {
+    if (requestedSource === "insight" || requestedSource === "independent" || requestedSource === "project") {
+      return requestedSource;
+    }
+    return "all";
+  });
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [highlightedId, setHighlightedId] = React.useState<string | null>(requestedId);
+  const hasHandledRequestedId = React.useRef(false);
 
   // Modal state
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -55,12 +73,29 @@ export default function TasksPage() {
       if (!res.ok) throw new Error("Failed to load tasks");
       const data: TasksResponse = await res.json();
       setTasks(data.tasks);
+
+      if (requestedId && !hasHandledRequestedId.current) {
+        hasHandledRequestedId.current = true;
+        const target = data.tasks.find((t) => t.id === requestedId);
+        if (target) {
+          setHighlightedId(requestedId);
+          if (target.status === "DONE") {
+            setStatusFilter("all");
+          }
+          setTimeout(() => {
+            const el = document.getElementById(`task-${requestedId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }, 150);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading tasks");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedId]);
 
   const fetchProjects = React.useCallback(async () => {
     try {
@@ -351,8 +386,10 @@ export default function TasksPage() {
             return (
               <div
                 key={task.id}
+                id={`task-${task.id}`}
                 className={cn(
-                  "flex items-start gap-3 p-3.5 rounded-lg border transition-colors",
+                  "flex items-start gap-3 p-3.5 rounded-lg border transition-all",
+                  highlightedId === task.id ? "ring-2 ring-[var(--accent)] border-[var(--accent)]/50" : "",
                   isDone
                     ? "border-white/5 bg-white/[0.01] opacity-70"
                     : "border-[var(--border)] bg-[var(--surface)] hover:border-white/20"
@@ -593,5 +630,20 @@ export default function TasksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex items-center justify-center p-12 text-center text-xs font-mono text-[var(--text-muted)]">
+          <Loader2 className="size-5 animate-spin mr-2" />
+          Loading tasks...
+        </div>
+      }
+    >
+      <TasksContent />
+    </React.Suspense>
   );
 }

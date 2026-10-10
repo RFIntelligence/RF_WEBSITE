@@ -244,6 +244,7 @@ import { GET as downloadDocument } from "@/app/api/documents/[id]/download/route
 
 describe("Project Detail Enhancements", () => {
   const sessionOrgA: Session = {
+    mode: "CLIENT",
     userId: "usr_orgA_lead",
     organizationId: "org_a",
     role: "ADMIN",
@@ -252,6 +253,7 @@ describe("Project Detail Enhancements", () => {
   };
 
   const sessionOrgB: Session = {
+    mode: "CLIENT",
     userId: "usr_orgB_lead",
     organizationId: "org_b",
     role: "ADMIN",

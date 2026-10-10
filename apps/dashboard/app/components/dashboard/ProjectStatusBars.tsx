@@ -1,9 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { ArrowUpRight } from "lucide-react";
 import { StatCard } from "./StatCard";
 import type { ProjectStatusCounts } from "@/app/lib/dashboard-mock";
+import type { Project } from "@/app/types/project";
 import { cn } from "@/app/lib/utils";
 
 interface ProjectStatusBarsProps {
@@ -11,6 +14,7 @@ interface ProjectStatusBarsProps {
   delta: string;
   deltaValue: number;
   period: string;
+  projects?: Project[];
 }
 
 interface StatusItem {
@@ -19,6 +23,7 @@ interface StatusItem {
   value: number;
   color: string;
   dotColor: string;
+  statusKey: string;
 }
 
 export function ProjectStatusBars({
@@ -26,6 +31,7 @@ export function ProjectStatusBars({
   delta,
   deltaValue,
   period,
+  projects,
 }: ProjectStatusBarsProps) {
   const [hovered, setHovered] = React.useState<number | null>(null);
 
@@ -36,6 +42,7 @@ export function ProjectStatusBars({
       value: counts.onTrack,
       color: "bg-green-500",
       dotColor: "#22c55e",
+      statusKey: "ON_TRACK",
     },
     {
       id: "at_risk",
@@ -43,6 +50,7 @@ export function ProjectStatusBars({
       value: counts.atRisk,
       color: "bg-yellow-500",
       dotColor: "#eab308",
+      statusKey: "AT_RISK",
     },
     {
       id: "blocked",
@@ -50,6 +58,7 @@ export function ProjectStatusBars({
       value: counts.blocked,
       color: "bg-[var(--accent)]",
       dotColor: "var(--accent)",
+      statusKey: "BLOCKED",
     },
     {
       id: "completed",
@@ -57,6 +66,7 @@ export function ProjectStatusBars({
       value: counts.completed,
       color: "bg-blue-500",
       dotColor: "#3b82f6",
+      statusKey: "COMPLETED",
     },
   ];
 
@@ -66,6 +76,7 @@ export function ProjectStatusBars({
   return (
     <StatCard
       title="Active Projects"
+      titleHref="/projects"
       value={total}
       delta={delta}
       deltaValue={deltaValue}
@@ -84,11 +95,13 @@ export function ProjectStatusBars({
             const isDimmed = hovered !== null && !isHovered;
 
             return (
-              <div
+              <Link
                 key={item.id}
-                className="relative flex-1 h-full flex flex-col justify-end items-center group cursor-pointer"
+                href={`/projects?status=${item.statusKey}`}
+                className="relative flex-1 h-full flex flex-col justify-end items-center group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded"
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
+                aria-label={`${item.label}: ${item.value} active projects. View filtered projects`}
               >
                 {/* Tooltip on hover */}
                 <AnimatePresence>
@@ -100,7 +113,7 @@ export function ProjectStatusBars({
                       transition={{ duration: 0.15 }}
                       className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black text-white px-2.5 py-1 text-xs font-mono font-bold whitespace-nowrap border border-white/30 z-30 pointer-events-none rounded shadow-md"
                     >
-                      {item.label}: {item.value}
+                      {item.label}: {item.value} (view list)
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -134,10 +147,28 @@ export function ProjectStatusBars({
                 <span className="mt-2 text-[10px] font-mono tracking-wider font-semibold text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors text-center">
                   {item.label}
                 </span>
-              </div>
+              </Link>
             );
           })}
         </div>
+
+        {/* Individual recent project entries */}
+        {projects && projects.length > 0 && (
+          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 mr-1">Recent:</span>
+            {projects.slice(0, 3).map((p) => (
+              <Link
+                key={p.id}
+                href={`/projects?id=${p.id}`}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.03] hover:bg-white/[0.08] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-white/10 hover:border-white/20 transition-all shrink-0 max-w-[140px] group/item focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+                title={`Open project: ${p.name}`}
+              >
+                <span className="truncate">{p.name}</span>
+                <ArrowUpRight className="size-2.5 opacity-50 group-hover/item:opacity-100 shrink-0" />
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </StatCard>
   );

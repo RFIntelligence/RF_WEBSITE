@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import Link from "next/link";
+import { TrendingUp, TrendingDown, Minus, ArrowUpRight } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 
 interface StatCardProps {
@@ -12,6 +13,7 @@ interface StatCardProps {
   period?: string;
   children: React.ReactNode;
   className?: string;
+  titleHref?: string;
 }
 
 export function StatCard({
@@ -22,6 +24,7 @@ export function StatCard({
   period,
   children,
   className,
+  titleHref,
 }: StatCardProps) {
   // Compute trend from numeric deltaValue if provided, else sign in string
   const isPositive =
@@ -67,9 +70,19 @@ export function StatCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-4 border-b border-white/10 pb-3 z-10">
         <div>
-          <h3 className="font-mono text-xs uppercase tracking-widest text-[var(--text-muted)] font-semibold">
-            {title}
-          </h3>
+          {titleHref ? (
+            <Link
+              href={titleHref}
+              className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--text-primary)] font-semibold transition-colors group/title focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded"
+            >
+              <span>{title}</span>
+              <ArrowUpRight className="size-3 opacity-50 group-hover/title:opacity-100 group-hover/title:translate-x-0.5 group-hover/title:-translate-y-0.5 transition-all" />
+            </Link>
+          ) : (
+            <h3 className="font-mono text-xs uppercase tracking-widest text-[var(--text-muted)] font-semibold">
+              {title}
+            </h3>
+          )}
           <p className="text-2xl sm:text-3xl font-black tracking-tight text-[var(--text-primary)] mt-1">
             {value}
           </p>

@@ -46,6 +46,78 @@ function parseTaskMetadata(task: {
 }
 
 /**
+ * GET /api/tasks/:id
+ * Retrieve a single task by ID with organization isolation.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
+  const session = await getSession();
+  if (!session) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id: taskId } = await params;
+  if (!taskId) {
+    return Response.json({ error: "Task ID is required" }, { status: 400 });
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, organizationId: session.organizationId },
+    include: {
+      project: { select: { id: true, name: true, accountName: true } },
+      assignee: { select: { id: true, name: true, avatarInitials: true } },
+    },
+  });
+
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+
+  const { cleanTitle, cleanDescription, insightId, priority } =
+    parseTaskMetadata(task);
+
+  const sourceInsight = insightId
+    ? await prisma.insight.findFirst({
+        where: { id: insightId, organizationId: session.organizationId },
+        select: { id: true, title: true, type: true, severity: true },
+      })
+    : null;
+
+  let effectivePriority = priority;
+  if (sourceInsight && effectivePriority === "MEDIUM") {
+    if (sourceInsight.severity === "CRITICAL") effectivePriority = "HIGH";
+    else if (sourceInsight.severity === "INFO") effectivePriority = "LOW";
+  }
+
+  const formatted: TaskDto = {
+    id: task.id,
+    title: task.title,
+    cleanTitle,
+    description: cleanDescription,
+    status: task.status as TaskStatus,
+    priority: effectivePriority,
+    dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+    createdAt: task.createdAt.toISOString(),
+    updatedAt: task.updatedAt.toISOString(),
+    projectId: task.projectId,
+    project: task.project,
+    assignee: task.assignee,
+    sourceInsight: sourceInsight
+      ? {
+          id: sourceInsight.id,
+          title: sourceInsight.title,
+          type: sourceInsight.type,
+          severity: sourceInsight.severity,
+        }
+      : null,
+  };
+
+  return Response.json({ task: formatted });
+}
+
+/**
  * PATCH /api/tasks/:id
  *
  * Body: {

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import { InsightsFeed } from "@/app/components/dashboard/insights-feed";
 import type { Insight } from "@/app/types/insight";
@@ -14,7 +15,13 @@ const insightsFetcher = async (url: string) => {
   return data.insights;
 };
 
-export default function AIInsightsPage() {
+function AIInsightsContent() {
+  const searchParams = useSearchParams();
+  const requestedId = searchParams.get("id");
+  const requestedType = searchParams.get("type");
+  const requestedSeverity = searchParams.get("severity");
+  const requestedTimeframe = searchParams.get("timeframe");
+
   const {
     data: fetchedInsights,
     error: swrError,
@@ -93,8 +100,27 @@ export default function AIInsightsPage() {
           onAnalyze={() => void handleAnalyze()}
           analyzing={analyzing}
           onInsightUpdated={handleInsightUpdated}
+          initialInsightId={requestedId}
+          initialCategory={requestedType ?? undefined}
+          initialPriority={requestedSeverity ?? undefined}
+          initialTimeframe={requestedTimeframe ?? undefined}
         />
       )}
     </div>
+  );
+}
+
+export default function AIInsightsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-16 gap-2 text-xs text-[var(--text-muted)]">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          Loading insights…
+        </div>
+      }
+    >
+      <AIInsightsContent />
+    </Suspense>
   );
 }

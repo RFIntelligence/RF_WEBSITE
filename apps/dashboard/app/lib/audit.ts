@@ -15,6 +15,7 @@ export interface WriteAuditLogInput {
  */
 export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
   try {
+    if (!prisma.auditLog?.create) return;
     await prisma.auditLog.create({
       data: {
         organizationId: input.organizationId,

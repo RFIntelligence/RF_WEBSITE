@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -85,6 +85,10 @@ interface InsightsFeedProps {
   /** Called when user clicks "Analyze now" */
   onAnalyze?: () => void;
   analyzing?: boolean;
+  initialInsightId?: string | null;
+  initialCategory?: string;
+  initialPriority?: string;
+  initialTimeframe?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -95,16 +99,31 @@ export function InsightsFeed({
   onInsightUpdated,
   onAnalyze,
   analyzing = false,
+  initialInsightId = null,
+  initialCategory,
+  initialPriority,
+  initialTimeframe,
 }: InsightsFeedProps) {
   const [items, setItems]               = useState<Insight[]>(initialInsights);
-  const [selectedCategory, setCategory] = useState<string>("all");
-  const [selectedPriority, setPriority] = useState<string>("all");
-  const [selectedTimeframe, setTimeframe] = useState<string>("all");
+  const [selectedCategory, setCategory] = useState<string>(initialCategory || "all");
+  const [selectedPriority, setPriority] = useState<string>(initialPriority || "all");
+  const [selectedTimeframe, setTimeframe] = useState<string>(initialTimeframe || "all");
   const [activeModal, setActiveModal]   = useState<Insight | null>(null);
   const [actionPending, setPending]     = useState<string | null>(null); // insightId being actioned
+  const hasHandledInitialId             = useRef(false);
 
   // Keep local items in sync when parent refreshes
   useState(() => { setItems(initialInsights); });
+
+  useEffect(() => {
+    if (initialInsightId && !hasHandledInitialId.current && items.length > 0) {
+      hasHandledInitialId.current = true;
+      const target = items.find((i) => i.id === initialInsightId);
+      if (target) {
+        setActiveModal(target);
+      }
+    }
+  }, [initialInsightId, items]);
 
   const filteredInsights = useMemo(() => {
     return items.filter((item) => {
@@ -263,6 +282,7 @@ export function InsightsFeed({
             return (
               <article
                 key={item.id}
+                id={`insight-${item.id}`}
                 aria-label={item.title}
                 onClick={() => !isPending && setActiveModal(item)}
                 className={cn(

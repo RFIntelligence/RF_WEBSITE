@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatCard } from "./StatCard";
 import type { AIProcessStats } from "@/app/types/dashboard";
@@ -20,6 +21,7 @@ interface StatusItem {
   value: number;
   description: string;
   color: string;
+  href: string;
 }
 
 export function AITasksProcessesCard({
@@ -37,6 +39,7 @@ export function AITasksProcessesCard({
       value: stats.queued,
       description: "Queued documents & reports",
       color: "bg-amber-400",
+      href: "/reports?tab=documents",
     },
     {
       id: "aichat",
@@ -44,6 +47,7 @@ export function AITasksProcessesCard({
       value: stats.activeConversations,
       description: "Active AI customer conversations",
       color: "bg-violet-400",
+      href: "/conversations",
     },
     {
       id: "completed",
@@ -51,6 +55,7 @@ export function AITasksProcessesCard({
       value: stats.completed,
       description: "Completed operations",
       color: "bg-green-500",
+      href: "/reports",
     },
     {
       id: "failed",
@@ -58,6 +63,7 @@ export function AITasksProcessesCard({
       value: stats.failed,
       description: "Failed operations",
       color: stats.failed > 0 ? "bg-red-500" : "bg-zinc-600",
+      href: "/reports?tab=documents",
     },
   ];
 
@@ -67,6 +73,7 @@ export function AITasksProcessesCard({
   return (
     <StatCard
       title="AI Tasks / Processes"
+      titleHref="/reports?tab=documents"
       value={total}
       delta={delta}
       deltaValue={deltaValue}
@@ -91,11 +98,13 @@ export function AITasksProcessesCard({
               const isDimmed = hovered !== null && !isHovered;
 
               return (
-                <div
+                <Link
                   key={item.id}
-                  className="relative flex-1 h-full flex flex-col justify-end items-center group cursor-pointer"
+                  href={item.href}
+                  className="relative flex-1 h-full flex flex-col justify-end items-center group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded"
                   onMouseEnter={() => setHovered(i)}
                   onMouseLeave={() => setHovered(null)}
+                  aria-label={`${item.label}: ${item.value} - ${item.description}`}
                 >
                   {/* Tooltip on hover */}
                   <AnimatePresence>
@@ -107,7 +116,7 @@ export function AITasksProcessesCard({
                         transition={{ duration: 0.15 }}
                         className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black text-white px-2.5 py-1 text-xs font-mono font-bold whitespace-nowrap border border-white/30 z-30 pointer-events-none rounded shadow-md"
                       >
-                        {item.label}: {item.value}
+                        {item.label}: {item.value} (view)
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -141,7 +150,7 @@ export function AITasksProcessesCard({
                   <span className="mt-2 text-[10px] font-mono tracking-wider font-semibold text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors text-center">
                     {item.label}
                   </span>
-                </div>
+                </Link>
               );
             })}
           </div>
